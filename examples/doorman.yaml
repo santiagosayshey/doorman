@@ -24,6 +24,10 @@ destinations:
     url: http://radarr:7878
     headers:
       X-Api-Key: ${RADARR_API_KEY} # the real key; only Doorman sees it
+    timeout: # optional; these are the defaults
+      connect: 5s # give up if Radarr doesn't accept the connection
+      response: 30s # give up if Radarr hasn't started answering; a body that is
+      # already arriving is never cut off
     log: # optional: this destination's requests in their own file
       path: /logs/radarr.log
       level: info
@@ -39,3 +43,11 @@ destinations:
           - method: GET
             path: /api/v3/movie/{id} # {name} matches one path segment
             limit: none
+
+      autobrr:
+        secret: ${AUTOBRR_RADARR_KEY}
+        allow:
+          - method: POST
+            path: /api/v3/release/push
+            limit: 30/m
+            timeout: 2m # this rule waits longer than the destination's 30s

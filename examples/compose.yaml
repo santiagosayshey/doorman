@@ -16,3 +16,4 @@ services:
       - TZ=Etc/UTC # your time zone for log times, e.g. America/New_York
       - RADARR_API_KEY=${RADARR_API_KEY}
       - HOMEPAGE_RADARR_KEY=${HOMEPAGE_RADARR_KEY}
+      - AUTOBRR_RADARR_KEY=${AUTOBRR_RADARR_KEY}

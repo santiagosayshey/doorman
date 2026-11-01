@@ -6,12 +6,15 @@ package proxy
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"math"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"sync"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -38,6 +41,7 @@ type key struct {
 type limitedRule struct {
 	rule
 	limiter *rate.Limiter // nil for "none"
+	timeout time.Duration // how long to wait for the start of a response
 }
 
 // New builds the handler. cfg must already be validated.
@@ -50,7 +54,7 @@ func New(cfg *config.Config, log *slog.Logger) (*Handler, error) {
 			return nil, fmt.Errorf("destination %s: %w", destName, err)
 		}
 		destLog := log.With(logging.DestinationKey, destName)
-		forward := newForwarder(target, dest.Headers, cfg.ClientAuth)
+		forward := newForwarder(target, dest.Headers, cfg.ClientAuth, dest.Timeout.Connect.Std())
 
 		for keyName, k := range dest.Keys {
 			compiled := &key{
@@ -59,10 +63,15 @@ func New(cfg *config.Config, log *slog.Logger) (*Handler, error) {
 				log:     destLog.With("key", keyName),
 			}
 			for _, r := range k.Allow {
-				compiled.rules = append(
-					compiled.rules,
-					limitedRule{rule: compileRule(r), limiter: newLimiter(r.Limit)},
-				)
+				timeout := dest.Timeout.Response.Std()
+				if r.Timeout != 0 {
+					timeout = r.Timeout.Std()
+				}
+				compiled.rules = append(compiled.rules, limitedRule{
+					rule:    compileRule(r),
+					limiter: newLimiter(r.Limit),
+					timeout: timeout,
+				})
 			}
 			h.keys[hashSecret(k.Secret)] = compiled
 		}
@@ -76,8 +85,14 @@ func newForwarder(
 	target *url.URL,
 	headers map[string]string,
 	sources []config.AuthSource,
+	connect time.Duration,
 ) *httputil.ReverseProxy {
+	transport, _ := http.DefaultTransport.(*http.Transport)
+	transport = transport.Clone()
+	transport.DialContext = (&net.Dialer{Timeout: connect, KeepAlive: 30 * time.Second}).DialContext
+
 	return &httputil.ReverseProxy{
+		Transport: transport,
 		Rewrite: func(pr *httputil.ProxyRequest) {
 			pr.SetURL(target)
 			stripAuth(pr.Out, sources)
@@ -85,23 +100,69 @@ func newForwarder(
 				pr.Out.Header.Set(name, value)
 			}
 		},
+		// The response has started: from here the body may take as long as it
+		// needs, so a slow download or a stream isn't cut off.
+		ModifyResponse: func(resp *http.Response) error {
+			if o, ok := resp.Request.Context().Value(outcomeKey{}).(*outcome); ok {
+				o.headersArrived()
+			}
+			return nil
+		},
 		// Record the failure on the request instead of logging it here, so
 		// ServeHTTP logs one line per request, with the key.
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
 			if o, ok := r.Context().Value(outcomeKey{}).(*outcome); ok {
-				o.err = err
+				switch cause := context.Cause(r.Context()); {
+				case errors.Is(cause, errNoResponse):
+					o.err = fmt.Errorf("no response within %s", o.timeout)
+				case errors.Is(cause, context.Canceled):
+					o.clientGone = true
+				default:
+					o.err = err
+				}
 			}
 			w.WriteHeader(http.StatusBadGateway)
 		},
 	}
 }
 
+// errNoResponse is why a request is cancelled when the destination hasn't
+// started answering within the rule's timeout.
+var errNoResponse = errors.New("no response in time")
+
 // outcome carries what happened to a forwarded request back to ServeHTTP.
-// The ReverseProxy hands its ErrorHandler a request derived from ours, so a
-// pointer in the context is how the error gets back.
-type outcome struct{ err error }
+// The ReverseProxy hands its hooks a request derived from ours, so a pointer
+// in the context is how results get back.
+type outcome struct {
+	err        error
+	clientGone bool
+	timeout    time.Duration
+
+	mu      sync.Mutex
+	started bool // the response headers arrived
+	cancel  context.CancelCauseFunc
+}
 
 type outcomeKey struct{}
+
+// headersArrived stops the timeout: only the wait for the first byte of a
+// response is limited.
+func (o *outcome) headersArrived() {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.started = true
+}
+
+// timeUp cancels the request unless the response has already started. The
+// lock makes the check and the cancel one step, so a response that arrives
+// at the last moment is never cut off.
+func (o *outcome) timeUp() {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if !o.started {
+		o.cancel(errNoResponse)
+	}
+}
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
@@ -156,18 +217,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 5. Forward, and log the outcome once the response is done.
-	result := &outcome{}
-	r = r.WithContext(context.WithValue(r.Context(), outcomeKey{}, result))
-	rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
-	k.forward.ServeHTTP(rec, r)
-
-	ms := time.Since(start).Milliseconds()
-	if result.err != nil {
-		log.Warn("destination unreachable", "status", rec.status, "ms", ms, "error", result.err)
-		return
-	}
-	log.Info("allowed", "status", rec.status, "ms", ms)
+	// 5. Forward.
+	k.forwardAndLog(w, r, matched.timeout, log, start)
 }
 
 func refuse(w http.ResponseWriter, status int, message string) {
@@ -192,4 +243,35 @@ func (s *statusRecorder) WriteHeader(code int) {
 // connection for WebSocket upgrades, which a plain wrapper would hide.
 func (s *statusRecorder) Unwrap() http.ResponseWriter {
 	return s.ResponseWriter
+}
+
+// forwardAndLog sends an allowed request to the destination, cancelling it
+// if the response hasn't started within timeout, and logs the outcome once
+// the response is done.
+func (k *key) forwardAndLog(
+	w http.ResponseWriter,
+	r *http.Request,
+	timeout time.Duration,
+	log *slog.Logger,
+	start time.Time,
+) {
+	ctx, cancel := context.WithCancelCause(r.Context())
+	defer cancel(nil)
+	result := &outcome{timeout: timeout, cancel: cancel}
+	timer := time.AfterFunc(timeout, result.timeUp)
+	defer timer.Stop()
+
+	r = r.WithContext(context.WithValue(ctx, outcomeKey{}, result))
+	rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+	k.forward.ServeHTTP(rec, r)
+
+	ms := time.Since(start).Milliseconds()
+	switch {
+	case result.clientGone:
+		log.Info("client disconnected", "ms", ms)
+	case result.err != nil:
+		log.Warn("destination unreachable", "status", rec.status, "ms", ms, "error", result.err)
+	default:
+		log.Info("allowed", "status", rec.status, "ms", ms)
+	}
 }

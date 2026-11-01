@@ -131,6 +131,8 @@ func (h *Pretty) writeRequest(b *bytes.Buffer, msg string, f map[string]string, 
 	case "denied", "refused":
 		b.WriteString(h.paint(yellow, msg))
 		b.WriteString(h.paint(dim, " · "+f["reason"]))
+	case "client disconnected":
+		b.WriteString(h.paint(dim, msg+" · "+f["ms"]+"ms"))
 	default:
 		b.WriteString(h.paint(red, msg))
 		if f["error"] != "" {

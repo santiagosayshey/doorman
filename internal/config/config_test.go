@@ -90,6 +90,38 @@ func TestParse(t *testing.T) {
 			[]string{"admin.listen: port 9000 is already used by listen"},
 		},
 
+		// timeouts
+		{
+			"destination timeouts",
+			strings.Replace(
+				valid,
+				"    keys:",
+				"    timeout:\n      connect: 2s\n      response: 1m\n    keys:",
+				1,
+			),
+			nil,
+		},
+		{
+			"rule timeout",
+			strings.Replace(valid, "limit: 10/m", "limit: 10/m\n            timeout: 2m", 1),
+			nil,
+		},
+		{
+			"timeout not a duration",
+			strings.Replace(valid, "limit: 10/m", "limit: 10/m\n            timeout: 5 seconds", 1),
+			[]string{`"5 seconds" is not a duration`},
+		},
+		{
+			"timeout zero",
+			strings.Replace(valid, "    keys:", "    timeout:\n      connect: 0s\n    keys:", 1),
+			[]string{`duration "0s" must be more than zero`},
+		},
+		{
+			"timeout negative",
+			strings.Replace(valid, "limit: 10/m", "limit: 10/m\n            timeout: -5s", 1),
+			[]string{`duration "-5s" must be more than zero`},
+		},
+
 		// logging
 		{"logging json", "logging:\n  level: debug\n  format: json\n" + valid, nil},
 		{
@@ -452,5 +484,20 @@ func TestLoggingDefaults(t *testing.T) {
 	}
 	if cfg.Destinations["radarr"].Log != nil {
 		t.Errorf("a destination without log should have a nil Log")
+	}
+}
+
+func TestTimeoutDefaults(t *testing.T) {
+	cfg, err := Parse([]byte(valid), lookup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	radarr := cfg.Destinations["radarr"]
+	if radarr.Timeout.Connect.Std() != 5*time.Second ||
+		radarr.Timeout.Response.Std() != 30*time.Second {
+		t.Errorf("timeout defaults = %+v, want 5s and 30s", radarr.Timeout)
+	}
+	if radarr.Keys["homepage"].Allow[0].Timeout != 0 {
+		t.Error("a rule without a timeout should be zero, meaning the destination's")
 	}
 }

@@ -37,6 +37,8 @@ type AuthSource struct {
 type Destination struct {
 	URL     string            `yaml:"url"`
 	Headers map[string]string `yaml:"headers"`
+	// Timeout is filled in with the defaults where the file leaves it out.
+	Timeout Timeout `yaml:"timeout"`
 	// Log is optional: nil means this destination logs to stdout only.
 	Log  *DestinationLog `yaml:"log"`
 	Keys map[string]Key  `yaml:"keys"`
@@ -57,6 +59,9 @@ type Rule struct {
 	Path   string `yaml:"path"`
 	// Limit is required: "N/s", "N/m", "N/h", "N/d" or "none".
 	Limit Limit `yaml:"limit"`
+	// Timeout overrides the destination's response timeout for this rule.
+	// Zero means use the destination's.
+	Timeout Duration `yaml:"timeout"`
 }
 
 // Admin is Doorman's own port: health now, metrics and the dashboard later.
@@ -126,6 +131,15 @@ func Parse(data []byte, lookupEnv func(string) (string, bool)) (*Config, error) 
 	}
 	if cfg.Listen == "" {
 		cfg.Listen = DefaultListen
+	}
+	for name, dest := range cfg.Destinations {
+		if dest.Timeout.Connect == 0 {
+			dest.Timeout.Connect = Duration(DefaultConnectTimeout)
+		}
+		if dest.Timeout.Response == 0 {
+			dest.Timeout.Response = Duration(DefaultResponseTimeout)
+		}
+		cfg.Destinations[name] = dest
 	}
 	if cfg.Logging.Format == "" {
 		cfg.Logging.Format = FormatText
