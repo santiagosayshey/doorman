@@ -58,7 +58,7 @@ func watchFile(
 }
 
 func fingerprint(path string) ([sha256.Size]byte, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // the path is the operator's own -c flag
 	if err != nil {
 		return [sha256.Size]byte{}, err
 	}

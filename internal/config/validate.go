@@ -36,7 +36,7 @@ func sorted[V any](m map[string]V) []string {
 func expandEnv(
 	cfg *Config,
 	lookupEnv func(string) (string, bool),
-	problems *Problems,
+	problems *[]string,
 ) map[string]bool {
 	unset := map[string]bool{}
 	expand := func(field, value string) string {
@@ -70,14 +70,14 @@ func expandEnv(
 }
 
 // adder returns a function that appends one formatted problem.
-func adder(problems *Problems) func(string, ...any) {
+func adder(problems *[]string) func(string, ...any) {
 	return func(format string, args ...any) {
 		*problems = append(*problems, fmt.Sprintf(format, args...))
 	}
 }
 
 // validateTop checks the top-level fields, so they're listed first.
-func validateTop(cfg *Config, problems *Problems) {
+func validateTop(cfg *Config, problems *[]string) {
 	add := adder(problems)
 
 	if cfg.Version != 1 {
@@ -119,7 +119,7 @@ func validateTop(cfg *Config, problems *Problems) {
 // validateDestinations appends every problem in the destinations and their
 // keys instead of stopping at the first one. Fields in unset already have a
 // problem from expandEnv and aren't reported again.
-func validateDestinations(cfg *Config, unset map[string]bool, problems *Problems) {
+func validateDestinations(cfg *Config, unset map[string]bool, problems *[]string) {
 	add := adder(problems)
 
 	// secret -> "destination/key" that first used it, to catch duplicates.
@@ -154,31 +154,39 @@ func validateDestinations(cfg *Config, unset map[string]bool, problems *Problems
 		}
 
 		for _, keyName := range sorted(dest.Keys) {
-			key := dest.Keys[keyName]
-			keyAt := at + ".keys." + keyName
-			id := destName + "/" + keyName
-
-			// Never print a secret: name the key that owns it instead.
-			if unset[keyAt+".secret"] {
-				// already reported as an unset variable
-			} else if key.Secret == "" {
-				add("%s.secret: required", keyAt)
-			} else if owner, taken := owners[key.Secret]; taken {
-				add("%s.secret: same secret as %s; every secret must be unique", keyAt, owner)
-			} else {
-				owners[key.Secret] = id
-			}
-
-			if len(key.Allow) == 0 {
-				add(
-					"%s.allow: at least one rule is required; a key that allows nothing is a mistake",
-					keyAt,
-				)
-			}
-			for i, rule := range key.Allow {
-				validateRule(fmt.Sprintf("%s.allow[%d]", keyAt, i), rule, add)
-			}
+			validateKey(destName, keyName, dest.Keys[keyName], unset, owners, add)
 		}
+	}
+}
+
+// validateKey checks one key. owners maps each secret seen so far to the key
+// that used it first, to catch duplicates across destinations.
+func validateKey(
+	destName, keyName string,
+	key Key,
+	unset map[string]bool,
+	owners map[string]string,
+	add func(string, ...any),
+) {
+	at := "destinations." + destName + ".keys." + keyName
+
+	// Never print a secret: name the key that owns it instead. A secret from
+	// an unset variable was already reported by expandEnv.
+	switch owner, taken := owners[key.Secret]; {
+	case unset[at+".secret"]:
+	case key.Secret == "":
+		add("%s.secret: required", at)
+	case taken:
+		add("%s.secret: same secret as %s; every secret must be unique", at, owner)
+	default:
+		owners[key.Secret] = destName + "/" + keyName
+	}
+
+	if len(key.Allow) == 0 {
+		add("%s.allow: at least one rule is required; a key that allows nothing is a mistake", at)
+	}
+	for i, rule := range key.Allow {
+		validateRule(fmt.Sprintf("%s.allow[%d]", at, i), rule, add)
 	}
 }
 

@@ -22,6 +22,7 @@ type DestinationLog struct {
 // Format is how log records are written.
 type Format string
 
+// The two log formats: text for people, json for log tools.
 const (
 	FormatText Format = "text"
 	FormatJSON Format = "json"

@@ -37,8 +37,8 @@ func Setup(cfg *config.Config, stdout io.Writer) (*slog.Logger, func() error, er
 		if dest.Log == nil {
 			continue
 		}
-		// Append, create if missing, readable by the owner and group only.
-		f, err := os.OpenFile(dest.Log.Path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o640)
+		// Append, create if missing, readable by the owner only.
+		f, err := os.OpenFile(dest.Log.Path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 		if err != nil {
 			_ = closeAll()
 			return nil, nil, err
@@ -101,6 +101,8 @@ func (r *Router) Enabled(ctx context.Context, level slog.Level) bool {
 	return false
 }
 
+// Handle writes the record to stdout and, if it belongs to a destination with
+// a log file, to that file too, each at its own level.
 func (r *Router) Handle(ctx context.Context, record slog.Record) error {
 	var errs []error
 	if r.stdout.Enabled(ctx, record.Level) {
@@ -144,6 +146,7 @@ func (r *Router) WithAttrs(attrs []slog.Attr) slog.Handler {
 	return next
 }
 
+// WithGroup passes the group on to every target.
 func (r *Router) WithGroup(name string) slog.Handler {
 	next := &Router{
 		stdout:       r.stdout.WithGroup(name),

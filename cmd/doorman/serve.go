@@ -40,16 +40,16 @@ func (a *app) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (a *app) reload() {
 	next, err := config.Load(a.path)
 	if err != nil {
-		var problems config.Problems
-		if errors.As(err, &problems) {
+		var invalid *config.ValidationError
+		if errors.As(err, &invalid) {
 			a.log.Error(
 				"reload failed, keeping the current config",
 				"config",
 				a.path,
 				"problems",
-				len(problems),
+				len(invalid.Problems),
 			)
-			for _, p := range problems {
+			for _, p := range invalid.Problems {
 				a.log.Error("reload problem", "problem", p)
 			}
 		} else {
@@ -118,7 +118,9 @@ func (a *app) serve(ctx context.Context, ln net.Listener, reload <-chan struct{}
 				"grace",
 				shutdownGrace.String(),
 			)
-			shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownGrace)
+			// ctx is already cancelled, so the grace period starts from a copy
+			// of it that can't be cancelled.
+			shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), shutdownGrace)
 			defer cancel()
 			if err := server.Shutdown(shutdownCtx); err != nil {
 				a.log.Warn("in-flight requests were cut off", "error", err)

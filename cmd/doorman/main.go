@@ -1,3 +1,8 @@
+// Command doorman is a reverse proxy that gives each client its own API key
+// with an allowlist of what it may do on one destination.
+//
+//	doorman -c doorman.yaml            serve
+//	doorman validate -c doorman.yaml   check a config and list every problem
 package main
 
 import (
@@ -65,7 +70,11 @@ func runProxy(args []string) int {
 		fmt.Printf("✗ opening log files: %v\n", err)
 		return 1
 	}
-	defer closeLogs()
+	defer func() {
+		if err := closeLogs(); err != nil {
+			log.Warn("closing log files failed", "error", err)
+		}
+	}()
 	slog.SetDefault(log)
 
 	handler, err := proxy.New(cfg, log)
@@ -76,28 +85,17 @@ func runProxy(args []string) int {
 	a := &app{path: *path, log: log, cfg: cfg}
 	a.handler.Store(handler)
 
-	ln, err := net.Listen("tcp", cfg.Listen)
+	// Ctrl+C and docker stop shut down gracefully.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	ln, err := (&net.ListenConfig{}).Listen(ctx, "tcp", cfg.Listen)
 	if err != nil {
 		log.Error("can't listen", "listen", cfg.Listen, "error", err)
 		return 1
 	}
 
-	// Ctrl+C and docker stop shut down gracefully.
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-
-	// SIGHUP and, unless -watch=false, saving the file both reload the config.
-	reload := make(chan struct{}, 1)
-	hup := make(chan os.Signal, 1)
-	signal.Notify(hup, syscall.SIGHUP)
-	go func() {
-		for range hup {
-			reload <- struct{}{}
-		}
-	}()
-	if *watch {
-		go watchFile(ctx, *path, loaded, time.Second, reload)
-	}
+	reload := reloadTriggers(ctx, *path, loaded, *watch)
 
 	announceStartup(log, cfg, *path)
 	if err := a.serve(ctx, ln, reload); err != nil {
@@ -111,11 +109,11 @@ func runProxy(args []string) int {
 func load(path string) (*config.Config, bool) {
 	cfg, err := config.Load(path)
 
-	var problems config.Problems
+	var invalid *config.ValidationError
 	switch {
-	case errors.As(err, &problems):
-		fmt.Printf("✗ %d problem(s) in %s\n", len(problems), path)
-		for _, p := range problems {
+	case errors.As(err, &invalid):
+		fmt.Printf("✗ %d problem(s) in %s\n", len(invalid.Problems), path)
+		for _, p := range invalid.Problems {
 			fmt.Printf("  %s\n", p)
 		}
 		return nil, false
@@ -124,4 +122,24 @@ func load(path string) (*config.Config, bool) {
 		return nil, false
 	}
 	return cfg, true
+}
+
+// reloadTriggers returns a channel that receives whenever the config should
+// be reloaded: on SIGHUP, and on a saved change to the file unless watch is
+// off.
+func reloadTriggers(ctx context.Context, path string, loaded [32]byte, watch bool) <-chan struct{} {
+	reload := make(chan struct{}, 1)
+
+	hup := make(chan os.Signal, 1)
+	signal.Notify(hup, syscall.SIGHUP)
+	go func() {
+		for range hup {
+			reload <- struct{}{}
+		}
+	}()
+
+	if watch {
+		go watchFile(ctx, path, loaded, time.Second, reload)
+	}
+	return reload
 }

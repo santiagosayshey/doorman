@@ -1,8 +1,8 @@
 // Package config loads and validates a Doorman config file.
 //
 // Loading never stops at the first problem it can recover from: every issue in
-// the file is collected and returned together as Problems, so one run of
-// `doorman verify` shows everything that needs fixing.
+// the file is collected and returned together as a ValidationError, so one run of
+// `doorman validate` shows everything that needs fixing.
 package config
 
 import (
@@ -64,16 +64,18 @@ const DefaultListen = ":8800"
 // DefaultClientAuth is used when the file has no client_auth section.
 var DefaultClientAuth = []AuthSource{{Header: "X-Api-Key"}}
 
-// Problems is every issue found in a config file, returned as one error.
-type Problems []string
+// ValidationError holds every problem found in a config file.
+type ValidationError struct {
+	Problems []string
+}
 
-func (p Problems) Error() string {
-	return strings.Join(p, "\n")
+func (e *ValidationError) Error() string {
+	return strings.Join(e.Problems, "\n")
 }
 
 // Load reads and validates the config file at path.
 func Load(path string) (*Config, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // the path is the operator's own -c flag
 	if err != nil {
 		return nil, err
 	}
@@ -81,25 +83,25 @@ func Load(path string) (*Config, error) {
 }
 
 // Parse decodes and validates a config. lookupEnv resolves ${VAR} references;
-// pass os.LookupEnv outside of tests. The error, when not nil, is Problems.
+// pass os.LookupEnv outside of tests. The error, when not nil, is a *ValidationError.
 func Parse(data []byte, lookupEnv func(string) (string, bool)) (*Config, error) {
 	var cfg Config
 
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true) // a misspelled field is an error, not silently ignored
 
-	var problems Problems
+	var problems []string
 
 	if err := dec.Decode(&cfg); err != nil {
 		if errors.Is(err, io.EOF) {
-			return nil, Problems{"the file is empty"}
+			return nil, &ValidationError{Problems: []string{"the file is empty"}}
 		}
 		// Type and unknown-field errors arrive together, and the decoder still
 		// fills in everything else, so keep them and validate the rest too.
 		var typeErr *yaml.TypeError
 		if !errors.As(err, &typeErr) {
 			// A syntax error stops the parser, so it can only be reported alone.
-			return nil, Problems{fmt.Sprintf("yaml: %v", err)}
+			return nil, &ValidationError{Problems: []string{fmt.Sprintf("yaml: %v", err)}}
 		}
 		problems = append(problems, typeErr.Errors...)
 	}
@@ -119,7 +121,7 @@ func Parse(data []byte, lookupEnv func(string) (string, bool)) (*Config, error) 
 	validateDestinations(&cfg, unset, &problems)
 
 	if len(problems) > 0 {
-		return nil, problems
+		return nil, &ValidationError{Problems: problems}
 	}
 	return &cfg, nil
 }

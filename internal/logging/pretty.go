@@ -70,10 +70,12 @@ func (h *Pretty) paint(code, s string) string {
 	return code + s + reset
 }
 
+// Enabled reports whether the level is at or above the handler's level.
 func (h *Pretty) Enabled(_ context.Context, level slog.Level) bool {
 	return level >= h.level.Level()
 }
 
+// Handle formats one record and writes it as a single line.
 func (h *Pretty) Handle(_ context.Context, r slog.Record) error {
 	attrs := slices.Clone(h.attrs)
 	r.Attrs(func(a slog.Attr) bool {
@@ -189,6 +191,7 @@ func (h *Pretty) grouped(a slog.Attr) slog.Attr {
 	return a
 }
 
+// WithAttrs returns a handler that adds attrs to every record.
 func (h *Pretty) WithAttrs(attrs []slog.Attr) slog.Handler {
 	next := *h
 	next.attrs = slices.Clone(h.attrs)
@@ -198,6 +201,7 @@ func (h *Pretty) WithAttrs(attrs []slog.Attr) slog.Handler {
 	return &next
 }
 
+// WithGroup returns a handler that prefixes later keys with "name.".
 func (h *Pretty) WithGroup(name string) slog.Handler {
 	if name == "" {
 		return h

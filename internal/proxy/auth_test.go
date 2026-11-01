@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -41,7 +42,7 @@ func TestClientKey(t *testing.T) {
 				r.Header.Set("X-Api-Key", tc.header)
 			}
 			got, err := clientKey(r, tc.sources)
-			if got != tc.want || err != tc.wantErr {
+			if got != tc.want || !errors.Is(err, tc.wantErr) {
 				t.Errorf("got %q, %v; want %q, %v", got, err, tc.want, tc.wantErr)
 			}
 		})

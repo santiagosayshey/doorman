@@ -72,7 +72,7 @@ func get(h http.Handler, path string) int {
 }
 
 func okUpstream(t *testing.T) *httptest.Server {
-	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	s := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
 	t.Cleanup(s.Close)
 	return s
 }
@@ -163,7 +163,7 @@ func TestSIGHUPReloadsWhileServing(t *testing.T) {
 
 func TestShutdownLetsInFlightRequestsFinish(t *testing.T) {
 	// The destination takes 300ms to answer.
-	slow := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	slow := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		time.Sleep(300 * time.Millisecond)
 		_, _ = w.Write([]byte("done"))
 	}))
@@ -187,7 +187,7 @@ func TestShutdownLetsInFlightRequestsFinish(t *testing.T) {
 			result <- 0
 			return
 		}
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		result <- resp.StatusCode
 	}()
 

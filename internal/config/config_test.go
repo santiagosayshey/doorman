@@ -303,10 +303,11 @@ destinations:
 `
 	_, err := Parse([]byte(bad), lookup)
 
-	var problems Problems
-	if !errors.As(err, &problems) {
-		t.Fatalf("expected Problems, got %T: %v", err, err)
+	var invalid *ValidationError
+	if !errors.As(err, &invalid) {
+		t.Fatalf("expected a *ValidationError, got %T: %v", err, err)
 	}
+	problems := invalid.Problems
 	// version, url, unset env var, method, path, limit. The unset secret
 	// isn't reported a second time as "required".
 	if len(problems) != 6 {
@@ -416,8 +417,8 @@ func TestKeyLimitIsOptional(t *testing.T) {
 // A limit that fails to parse is one problem, not also "required".
 func TestBadLimitReportedOnce(t *testing.T) {
 	_, err := Parse([]byte(strings.Replace(valid, "limit: 10/m", "limit: 30/min", 1)), lookup)
-	var problems Problems
-	if !errors.As(err, &problems) || len(problems) != 1 {
+	var invalid *ValidationError
+	if !errors.As(err, &invalid) || len(invalid.Problems) != 1 {
 		t.Fatalf("expected exactly 1 problem, got:\n%v", err)
 	}
 }

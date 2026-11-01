@@ -1,0 +1,61 @@
+version: "2"
+
+formatters:
+  enable:
+    - gofumpt # gofmt plus stricter rules
+    - goimports # stdlib, then third party, then this module
+    - golines # wrap long lines
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/santiagosayshey/doorman
+    golines:
+      max-len: 100
+
+linters:
+  default: standard # errcheck, govet, ineffassign, staticcheck, unused
+  enable:
+    # Security & HTTP
+    - gosec
+    - bodyclose
+    - noctx
+    - contextcheck
+    # Errors & naming
+    - errorlint
+    - nilerr
+    - errname
+    - revive # Go naming, including snake_case variables
+    # Logging discipline
+    - sloglint
+    - forbidigo
+    # Complexity limits
+    - gocognit
+    - funlen
+    # Every //nolint names its linter and says why
+    - nolintlint
+  settings:
+    sloglint:
+      kv-only: true # key-value pairs, not slog.Attr values
+      key-naming-case: snake
+    forbidigo:
+      forbid:
+        - pattern: ^fmt\.Print
+          msg: log through slog; only the CLI in cmd/ prints directly
+        - pattern: ^log\.(Print|Fatal|Panic)
+          msg: use log/slog, not the old log package
+    gocognit:
+      min-complexity: 20
+    funlen:
+      lines: 60
+      statements: 40
+    nolintlint:
+      require-specific: true
+      require-explanation: true
+  exclusions:
+    rules:
+      # Rules for production code only.
+      - path: _test\.go
+        linters: [gosec, funlen, gocognit, bodyclose, noctx]
+      # The CLI prints results for people, not log records.
+      - path: ^cmd/
+        linters: [forbidigo]

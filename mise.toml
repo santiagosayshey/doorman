@@ -1,5 +1,11 @@
 [tools]
 go = "1.27.3"
+golangci-lint = "2.15.0"
 
 [env]
 _.file = ".dev/.env"
+
+[tasks]
+fmt = "golangci-lint fmt"
+lint = "golangci-lint run"
+test = "go test -race ./..."

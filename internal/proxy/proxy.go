@@ -164,7 +164,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func refuse(w http.ResponseWriter, status int, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	fmt.Fprintf(w, "{\"error\":%q}\n", message)
+	_, _ = fmt.Fprintf(w, "{\"error\":%q}\n", message)
 }
 
 // statusRecorder remembers the status code a response was sent with.
