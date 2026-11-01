@@ -9,7 +9,9 @@ package logging
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"os"
 
@@ -41,6 +43,13 @@ func Setup(cfg *config.Config, stdout io.Writer) (*slog.Logger, func() error, er
 		f, err := os.OpenFile(dest.Log.Path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 		if err != nil {
 			_ = closeAll()
+			if errors.Is(err, fs.ErrPermission) {
+				// The usual cause is a mounted folder owned by another user.
+				return nil, nil, fmt.Errorf(
+					"%w; doorman runs as user %d:%d, so make the folder writable by that user "+
+						"or run doorman as the folder's owner (in Docker: user: in compose)",
+					err, os.Getuid(), os.Getgid())
+			}
 			return nil, nil, err
 		}
 		files[name] = f
