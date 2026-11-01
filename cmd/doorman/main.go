@@ -42,11 +42,8 @@ func runValidate(args []string) int {
 		return 1
 	}
 
-	keys := 0
-	for _, dest := range cfg.Destinations {
-		keys += len(dest.Keys)
-	}
-	fmt.Printf("✓ %s is valid: %d destination(s), %d key(s)\n", *path, len(cfg.Destinations), keys)
+	destinations, keys := count(cfg)
+	fmt.Printf("✓ %s is valid: %s, %s\n", *path, plural(destinations, "destination"), plural(keys, "key"))
 	return 0
 }
 
