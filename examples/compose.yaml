@@ -1,0 +1,18 @@
+services:
+  doorman:
+    image: doorman
+    build: ..
+    restart: unless-stopped
+    # Optional: run as your own user, e.g. Unraid's nobody:users. Doorman only
+    # needs to read /config and write /logs.
+    # user: "99:100"
+    ports:
+      - "8800:8800"
+      # - "8801:8801" # only to let a monitor outside Docker reach /health
+    volumes:
+      - ./doorman.yaml:/config/doorman.yaml:ro
+      - ./logs:/logs
+    environment:
+      - TZ=Etc/UTC # your time zone for log times, e.g. America/New_York
+      - RADARR_API_KEY=${RADARR_API_KEY}
+      - HOMEPAGE_RADARR_KEY=${HOMEPAGE_RADARR_KEY}

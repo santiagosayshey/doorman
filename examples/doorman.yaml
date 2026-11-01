@@ -1,0 +1,41 @@
+# Doorman config. Check it with: doorman validate -c doorman.yaml
+version: 1
+
+# Where clients connect.
+listen: :8800
+
+# Doorman's own port: /health now, metrics and the dashboard later. No proxy
+# key can reach it. In Docker it must listen on all interfaces (":8801") for
+# the port mapping to work; it stays private unless you publish 8801.
+admin:
+  listen: :8801
+
+logging:
+  level: info # debug, info, warn or error
+  format: text # text for people, json for log tools
+
+# Where to look for a client's key, in order. Default: the X-Api-Key header.
+client_auth:
+  - header: X-Api-Key
+  - query: apikey # some clients put the key in the URL
+
+destinations:
+  radarr:
+    url: http://radarr:7878
+    headers:
+      X-Api-Key: ${RADARR_API_KEY} # the real key; only Doorman sees it
+    log: # optional: this destination's requests in their own file
+      path: /logs/radarr.log
+      level: info
+    keys:
+      # Everything a key may do is listed; anything else is refused.
+      homepage:
+        secret: ${HOMEPAGE_RADARR_KEY} # what Homepage sends instead of Radarr's key
+        limit: 100/h # optional cap across all of this key's rules
+        allow:
+          - method: GET
+            path: /api/v3/movie
+            limit: 10/m # N/s, N/m, N/h, N/d or none
+          - method: GET
+            path: /api/v3/movie/{id} # {name} matches one path segment
+            limit: none
