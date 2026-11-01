@@ -5,6 +5,7 @@
 package proxy
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"math"
@@ -49,7 +50,7 @@ func New(cfg *config.Config, log *slog.Logger) (*Handler, error) {
 			return nil, fmt.Errorf("destination %s: %w", destName, err)
 		}
 		destLog := log.With(logging.DestinationKey, destName)
-		forward := newForwarder(target, dest.Headers, cfg.ClientAuth, destLog)
+		forward := newForwarder(target, dest.Headers, cfg.ClientAuth)
 
 		for keyName, k := range dest.Keys {
 			compiled := &key{
@@ -75,7 +76,6 @@ func newForwarder(
 	target *url.URL,
 	headers map[string]string,
 	sources []config.AuthSource,
-	log *slog.Logger,
 ) *httputil.ReverseProxy {
 	return &httputil.ReverseProxy{
 		Rewrite: func(pr *httputil.ProxyRequest) {
@@ -85,22 +85,23 @@ func newForwarder(
 				pr.Out.Header.Set(name, value)
 			}
 		},
+		// Record the failure on the request instead of logging it here, so
+		// ServeHTTP logs one line per request, with the key.
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
-			log.Warn(
-				"destination unreachable",
-				"event",
-				"request",
-				"method",
-				r.Method,
-				"path",
-				r.URL.EscapedPath(),
-				"error",
-				err,
-			)
+			if o, ok := r.Context().Value(outcomeKey{}).(*outcome); ok {
+				o.err = err
+			}
 			w.WriteHeader(http.StatusBadGateway)
 		},
 	}
 }
+
+// outcome carries what happened to a forwarded request back to ServeHTTP.
+// The ReverseProxy hands its ErrorHandler a request derived from ours, so a
+// pointer in the context is how the error gets back.
+type outcome struct{ err error }
+
+type outcomeKey struct{}
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
@@ -156,9 +157,17 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 5. Forward, and log the outcome once the response is done.
+	result := &outcome{}
+	r = r.WithContext(context.WithValue(r.Context(), outcomeKey{}, result))
 	rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 	k.forward.ServeHTTP(rec, r)
-	log.Info("allowed", "status", rec.status, "ms", time.Since(start).Milliseconds())
+
+	ms := time.Since(start).Milliseconds()
+	if result.err != nil {
+		log.Warn("destination unreachable", "status", rec.status, "ms", ms, "error", result.err)
+		return
+	}
+	log.Info("allowed", "status", rec.status, "ms", ms)
 }
 
 func refuse(w http.ResponseWriter, status int, message string) {

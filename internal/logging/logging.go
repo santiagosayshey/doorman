@@ -34,6 +34,7 @@ func Setup(cfg *config.Config, stdout io.Writer) (*slog.Logger, func() error, er
 		return errors.Join(errs...)
 	}
 
+	who := whoWidth(cfg)
 	destinations := map[string]slog.Handler{}
 	for name, dest := range cfg.Destinations {
 		if dest.Log == nil {
@@ -54,7 +55,7 @@ func Setup(cfg *config.Config, stdout io.Writer) (*slog.Logger, func() error, er
 		}
 		files[name] = f
 		// Files never get colors, which would show up as escape codes.
-		destinations[name] = newHandler(f, cfg.Logging.Format, dest.Log.Level.Slog(), false)
+		destinations[name] = newHandler(f, cfg.Logging.Format, dest.Log.Level.Slog(), false, who)
 	}
 
 	stdoutHandler := newHandler(
@@ -62,17 +63,34 @@ func Setup(cfg *config.Config, stdout io.Writer) (*slog.Logger, func() error, er
 		cfg.Logging.Format,
 		cfg.Logging.Level.Slog(),
 		UseColor(stdout),
+		who,
 	)
 	router := NewRouter(stdoutHandler, destinations)
 	return slog.New(router), closeAll, nil
 }
 
 // newHandler returns JSON for log tools, or the Pretty layout for people.
-func newHandler(w io.Writer, format config.Format, level slog.Level, color bool) slog.Handler {
+func newHandler(
+	w io.Writer, format config.Format, level slog.Level, color bool, whoWidth int,
+) slog.Handler {
 	if format == config.FormatJSON {
 		return slog.NewJSONHandler(w, &slog.HandlerOptions{Level: level})
 	}
-	return NewPretty(w, level, color)
+	return NewPretty(w, level, color, whoWidth)
+}
+
+// whoWidth is the length of the longest "destination/key" in cfg, so every
+// request line's columns start at the same place. Keys added by a reload
+// can be longer; their lines just push the columns out a little.
+func whoWidth(cfg *config.Config) int {
+	widest := 0
+	for destName, dest := range cfg.Destinations {
+		widest = max(widest, len(destName))
+		for keyName := range dest.Keys {
+			widest = max(widest, len(destName)+1+len(keyName))
+		}
+	}
+	return widest
 }
 
 // Router is a slog.Handler that sends every record to stdout and records

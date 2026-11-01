@@ -9,7 +9,7 @@ import (
 
 func prettyLogger(color bool) (*slog.Logger, *bytes.Buffer) {
 	var buf bytes.Buffer
-	return slog.New(NewPretty(&buf, slog.LevelDebug, color)), &buf
+	return slog.New(NewPretty(&buf, slog.LevelDebug, color, 0)), &buf
 }
 
 func TestPrettyRequestColumns(t *testing.T) {
@@ -87,5 +87,19 @@ func TestUseColorIsOffForBuffersAndNoColor(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 	if UseColor(nil) {
 		t.Error("NO_COLOR should turn colors off")
+	}
+}
+
+func TestPrettyPadsTheWhoColumn(t *testing.T) {
+	var buf bytes.Buffer
+	log := slog.New(NewPretty(&buf, slog.LevelInfo, false, len("radarr/homepage")))
+	for _, who := range [][2]string{{"radarr", "homepage"}, {"radarr", "tv"}} {
+		log.Info("allowed", "event", "request", "destination", who[0], "key", who[1],
+			"method", "GET", "path", "/api", "status", 200, "ms", 1)
+	}
+
+	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
+	if strings.Index(lines[0], "GET") != strings.Index(lines[1], "GET") {
+		t.Errorf("the method column should line up:\n%s", buf.String())
 	}
 }

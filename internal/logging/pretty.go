@@ -26,12 +26,16 @@ type Pretty struct {
 	color bool
 	attrs []slog.Attr // from WithAttrs
 	group string      // from WithGroup, as a "name." prefix
+	// whoWidth pads the destination/key column, so the columns after it line
+	// up. Set it to the longest destination/key in the config.
+	whoWidth int
 }
 
 // NewPretty returns a Pretty handler. With color, levels and outcomes are
-// colored; leave it off for files and pipes.
-func NewPretty(w io.Writer, level slog.Leveler, color bool) *Pretty {
-	return &Pretty{w: w, mu: &sync.Mutex{}, level: level, color: color}
+// colored; leave it off for files and pipes. whoWidth pads the
+// destination/key column; 0 means no padding.
+func NewPretty(w io.Writer, level slog.Leveler, color bool, whoWidth int) *Pretty {
+	return &Pretty{w: w, mu: &sync.Mutex{}, level: level, color: color, whoWidth: whoWidth}
 }
 
 // UseColor reports whether w is a terminal that should get colors: not a
@@ -113,7 +117,7 @@ func (h *Pretty) writeRequest(b *bytes.Buffer, msg string, f map[string]string, 
 	if f["key"] != "" {
 		who += "/" + f["key"]
 	}
-	b.WriteString(who)
+	fmt.Fprintf(b, "%-*s", h.whoWidth, who)
 	b.WriteString(sep)
 	fmt.Fprintf(b, "%-*s %-*s ", methodWidth, f["method"], pathWidth, cut(f["path"], pathWidth))
 

@@ -193,14 +193,17 @@ func TestUnreachableDestination(t *testing.T) {
 	url := up.server.URL
 	up.server.Close() // nothing is listening any more
 
-	h, _ := setup(t, url)
-	if w := send(
-		h,
-		http.MethodGet,
-		"/api/v3/movie/5",
-		"homepage-secret",
-	); w.Code != http.StatusBadGateway {
+	h, logs := setup(t, url)
+	w := send(h, http.MethodGet, "/api/v3/movie/5", "homepage-secret")
+	if w.Code != http.StatusBadGateway {
 		t.Errorf("status = %d, want 502", w.Code)
+	}
+
+	// One line for the request, naming the key, not a second "allowed" line.
+	out := logs.String()
+	if strings.Count(out, "\n") != 1 || !strings.Contains(out, `msg="destination unreachable"`) ||
+		!strings.Contains(out, "key=homepage") {
+		t.Errorf("want one unreachable line with the key, got:\n%s", out)
 	}
 }
 
