@@ -1,0 +1,156 @@
+# Doorman keys for Profilarr (https://github.com/Dictionarry-Hub/profilarr).
+#
+# Copy the profilarr key under each of your destinations. In Profilarr, set the
+# Arr instance's URL to Doorman and its API key to the key's secret.
+#
+# Built from Profilarr's Radarr and Sonarr clients
+# (src/lib/server/utils/arr/base.ts and clients/). Profilarr uses /api/v3 on
+# Sonarr v4 and v5 alike.
+#
+# Two rules deserve a decision before you copy them:
+#   - DELETE movie/{id} and series/{id} exist only for cleanup's "removed from
+#     TMDB/TVDB" feature, and remove items from your library. They're
+#     commented out; leave them that way unless you use that cleanup.
+#   - POST /api/v3/command allows every Radarr/Sonarr command, not just the
+#     search, rename and refresh commands Profilarr sends: the command name is
+#     in the request body, and Doorman only matches method and path.
+#
+# Paths with a {placeholder} are quoted: inside { } on one line, YAML would
+# read the braces as a nested map.
+#
+# Limits are off: one sync sends a request per custom format, a few hundred in
+# a burst. Tighten them from your logs once you know your sync's shape.
+version: 1
+
+destinations:
+  radarr:
+    url: http://radarr:7878
+    headers:
+      X-Api-Key: ${RADARR_API_KEY}
+    keys:
+      profilarr:
+        secret: ${PROFILARR_RADARR_KEY}
+        allow:
+          # Connection test and version detection
+          - { method: GET, path: /api, limit: none }
+          - { method: GET, path: /api/v3/system/status, limit: none }
+          - { method: GET, path: /api/v3/health, limit: none }
+
+          # Sync: quality profiles ({id} also covers /schema)
+          - { method: GET, path: /api/v3/qualityprofile, limit: none }
+          - { method: GET, path: "/api/v3/qualityprofile/{id}", limit: none }
+          - { method: POST, path: /api/v3/qualityprofile, limit: none }
+          - { method: PUT, path: "/api/v3/qualityprofile/{id}", limit: none }
+          - { method: DELETE, path: "/api/v3/qualityprofile/{id}", limit: none }
+          # Sync: custom formats
+          - { method: GET, path: /api/v3/customformat, limit: none }
+          - { method: GET, path: "/api/v3/customformat/{id}", limit: none }
+          - { method: POST, path: /api/v3/customformat, limit: none }
+          - { method: PUT, path: "/api/v3/customformat/{id}", limit: none }
+          - { method: DELETE, path: "/api/v3/customformat/{id}", limit: none }
+          # Sync: delay profiles
+          - { method: GET, path: /api/v3/delayprofile, limit: none }
+          - { method: GET, path: "/api/v3/delayprofile/{id}", limit: none }
+          - { method: POST, path: /api/v3/delayprofile, limit: none }
+          - { method: PUT, path: "/api/v3/delayprofile/{id}", limit: none }
+          - { method: DELETE, path: "/api/v3/delayprofile/{id}", limit: none }
+          # Sync: media management, naming, quality sizes, tags
+          - { method: GET, path: /api/v3/config/mediamanagement, limit: none }
+          - { method: PUT, path: "/api/v3/config/mediamanagement/{id}", limit: none }
+          - { method: GET, path: /api/v3/config/naming, limit: none }
+          - { method: PUT, path: "/api/v3/config/naming/{id}", limit: none }
+          - { method: GET, path: /api/v3/qualitydefinition, limit: none }
+          - { method: PUT, path: /api/v3/qualitydefinition/update, limit: none }
+          - { method: GET, path: /api/v3/tag, limit: none }
+          - { method: POST, path: /api/v3/tag, limit: none }
+
+          # Library
+          - { method: GET, path: /api/v3/movie, limit: none }
+          - { method: GET, path: /api/v3/moviefile, limit: none }
+          - { method: GET, path: /api/v3/queue, limit: none }
+
+          # Upgrades: search commands, interactive search, cooldown tags
+          - { method: POST, path: /api/v3/command, limit: none }
+          - { method: GET, path: /api/v3/command, limit: none }
+          - { method: GET, path: "/api/v3/command/{id}", limit: none }
+          - { method: GET, path: /api/v3/release, limit: none, timeout: 2m } # Profilarr waits up to 120s
+          - { method: PUT, path: "/api/v3/movie/{id}", limit: none }
+          - { method: PUT, path: /api/v3/movie/editor, limit: none }
+
+          # Renames (the commands are covered above)
+          - { method: GET, path: /api/v3/rename, limit: none }
+
+          # Cleanup of movies removed from TMDB: removes them from the library.
+          # - { method: DELETE, path: "/api/v3/movie/{id}", limit: none }
+
+          # Logs tab
+          - { method: GET, path: /api/v3/log, limit: none }
+          - { method: GET, path: /api/v3/log/file, limit: none }
+          - { method: GET, path: "/api/v3/log/file/{filename}", limit: none }
+
+  sonarr:
+    url: http://sonarr:8989
+    headers:
+      X-Api-Key: ${SONARR_API_KEY}
+    keys:
+      profilarr:
+        secret: ${PROFILARR_SONARR_KEY}
+        allow:
+          # Connection test and version detection
+          - { method: GET, path: /api, limit: none }
+          - { method: GET, path: /api/v3/system/status, limit: none }
+          - { method: GET, path: /api/v3/health, limit: none }
+
+          # Sync: quality profiles ({id} also covers /schema)
+          - { method: GET, path: /api/v3/qualityprofile, limit: none }
+          - { method: GET, path: "/api/v3/qualityprofile/{id}", limit: none }
+          - { method: POST, path: /api/v3/qualityprofile, limit: none }
+          - { method: PUT, path: "/api/v3/qualityprofile/{id}", limit: none }
+          - { method: DELETE, path: "/api/v3/qualityprofile/{id}", limit: none }
+          # Sync: custom formats
+          - { method: GET, path: /api/v3/customformat, limit: none }
+          - { method: GET, path: "/api/v3/customformat/{id}", limit: none }
+          - { method: POST, path: /api/v3/customformat, limit: none }
+          - { method: PUT, path: "/api/v3/customformat/{id}", limit: none }
+          - { method: DELETE, path: "/api/v3/customformat/{id}", limit: none }
+          # Sync: delay profiles
+          - { method: GET, path: /api/v3/delayprofile, limit: none }
+          - { method: GET, path: "/api/v3/delayprofile/{id}", limit: none }
+          - { method: POST, path: /api/v3/delayprofile, limit: none }
+          - { method: PUT, path: "/api/v3/delayprofile/{id}", limit: none }
+          - { method: DELETE, path: "/api/v3/delayprofile/{id}", limit: none }
+          # Sync: media management, naming, quality sizes, tags
+          - { method: GET, path: /api/v3/config/mediamanagement, limit: none }
+          - { method: PUT, path: "/api/v3/config/mediamanagement/{id}", limit: none }
+          - { method: GET, path: /api/v3/config/naming, limit: none }
+          - { method: PUT, path: "/api/v3/config/naming/{id}", limit: none }
+          - { method: GET, path: /api/v3/qualitydefinition, limit: none }
+          - { method: PUT, path: /api/v3/qualitydefinition/update, limit: none }
+          - { method: GET, path: /api/v3/tag, limit: none }
+          - { method: POST, path: /api/v3/tag, limit: none }
+
+          # Library
+          - { method: GET, path: /api/v3/series, limit: none }
+          - { method: GET, path: "/api/v3/series/{id}", limit: none }
+          - { method: GET, path: /api/v3/episode, limit: none }
+          - { method: GET, path: /api/v3/episodefile, limit: none }
+          - { method: GET, path: /api/v3/queue, limit: none }
+
+          # Upgrades: search commands, interactive search, cooldown tags
+          - { method: POST, path: /api/v3/command, limit: none }
+          - { method: GET, path: /api/v3/command, limit: none }
+          - { method: GET, path: "/api/v3/command/{id}", limit: none }
+          - { method: GET, path: /api/v3/release, limit: none, timeout: 2m } # Profilarr waits up to 120s
+          - { method: PUT, path: "/api/v3/series/{id}", limit: none }
+          - { method: PUT, path: /api/v3/series/editor, limit: none }
+
+          # Renames (the commands are covered above)
+          - { method: GET, path: /api/v3/rename, limit: none }
+
+          # Cleanup of series removed from TVDB: removes them from the library.
+          # - { method: DELETE, path: "/api/v3/series/{id}", limit: none }
+
+          # Logs tab
+          - { method: GET, path: /api/v3/log, limit: none }
+          - { method: GET, path: /api/v3/log/file, limit: none }
+          - { method: GET, path: "/api/v3/log/file/{filename}", limit: none }
