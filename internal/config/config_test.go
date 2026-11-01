@@ -78,6 +78,18 @@ func TestParse(t *testing.T) {
 			[]string{`listen: "localhost" is not host:port`},
 		},
 
+		// admin
+		{"admin listen", "admin:\n  listen: :9100\n" + valid, nil},
+		{
+			"admin listen without port", "admin:\n  listen: localhost\n" + valid,
+			[]string{`admin.listen: "localhost" is not host:port`},
+		},
+		{
+			"admin listen same port as listen",
+			"listen: :9000\nadmin:\n  listen: 127.0.0.1:9000\n" + valid,
+			[]string{"admin.listen: port 9000 is already used by listen"},
+		},
+
 		// logging
 		{"logging json", "logging:\n  level: debug\n  format: json\n" + valid, nil},
 		{
@@ -428,8 +440,12 @@ func TestLoggingDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Listen != ":8800" {
-		t.Errorf("listen default = %q, want :8800", cfg.Listen)
+	if cfg.Listen != ":8800" || cfg.Admin.Listen != "127.0.0.1:8801" {
+		t.Errorf(
+			"listen defaults = %q and %q, want :8800 and 127.0.0.1:8801",
+			cfg.Listen,
+			cfg.Admin.Listen,
+		)
 	}
 	if cfg.Logging.Format != FormatText || cfg.Logging.Level.Slog() != slog.LevelInfo {
 		t.Errorf("logging defaults = %+v, want text at info", cfg.Logging)

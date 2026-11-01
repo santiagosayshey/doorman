@@ -18,6 +18,7 @@ func announceStartup(log *slog.Logger, cfg *config.Config, configPath string) {
 	log.Info("🚪 doorman started",
 		"version", version,
 		"listen", cfg.Listen,
+		"admin", cfg.Admin.Listen,
 		"config", configPath,
 		"destinations", destinations,
 		"keys", keys,

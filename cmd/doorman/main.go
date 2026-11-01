@@ -3,6 +3,7 @@
 //
 //	doorman -c doorman.yaml            serve
 //	doorman validate -c doorman.yaml   check a config and list every problem
+//	doorman health -c doorman.yaml     ask a running doorman whether it's up
 package main
 
 import (
@@ -23,8 +24,13 @@ import (
 )
 
 func main() {
-	if len(os.Args) > 1 && os.Args[1] == "validate" {
-		os.Exit(runValidate(os.Args[2:]))
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "validate":
+			os.Exit(runValidate(os.Args[2:]))
+		case "health":
+			os.Exit(runHealth(os.Args[2:]))
+		}
 	}
 	os.Exit(runProxy(os.Args[1:]))
 }
@@ -94,11 +100,16 @@ func runProxy(args []string) int {
 		log.Error("can't listen", "listen", cfg.Listen, "error", err)
 		return 1
 	}
+	adminLn, err := (&net.ListenConfig{}).Listen(ctx, "tcp", cfg.Admin.Listen)
+	if err != nil {
+		log.Error("can't listen", "admin_listen", cfg.Admin.Listen, "error", err)
+		return 1
+	}
 
 	reload := reloadTriggers(ctx, *path, loaded, *watch)
 
 	announceStartup(log, cfg, *path)
-	if err := a.serve(ctx, ln, reload); err != nil {
+	if err := a.serve(ctx, ln, adminLn, reload); err != nil {
 		log.Error("server stopped", "error", err)
 		return 1
 	}

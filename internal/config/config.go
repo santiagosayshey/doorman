@@ -20,6 +20,7 @@ import (
 type Config struct {
 	Version      int                    `yaml:"version"`
 	Listen       string                 `yaml:"listen"`
+	Admin        Admin                  `yaml:"admin"`
 	Logging      Logging                `yaml:"logging"`
 	ClientAuth   []AuthSource           `yaml:"client_auth"`
 	Destinations map[string]Destination `yaml:"destinations"`
@@ -58,8 +59,19 @@ type Rule struct {
 	Limit Limit `yaml:"limit"`
 }
 
-// DefaultListen is the address the proxy serves on when listen is left out.
-const DefaultListen = ":8800"
+// Admin is Doorman's own port: health now, metrics and the dashboard later.
+// No proxy key can reach it.
+type Admin struct {
+	Listen string `yaml:"listen"`
+}
+
+const (
+	// DefaultListen is the address the proxy serves on when listen is left out.
+	DefaultListen = ":8800"
+	// DefaultAdminListen keeps the admin port on localhost unless the operator
+	// exposes it, e.g. with ":8801" for a monitoring tool.
+	DefaultAdminListen = "127.0.0.1:8801"
+)
 
 // DefaultClientAuth is used when the file has no client_auth section.
 var DefaultClientAuth = []AuthSource{{Header: "X-Api-Key"}}
@@ -108,6 +120,9 @@ func Parse(data []byte, lookupEnv func(string) (string, bool)) (*Config, error) 
 
 	if cfg.ClientAuth == nil {
 		cfg.ClientAuth = DefaultClientAuth
+	}
+	if cfg.Admin.Listen == "" {
+		cfg.Admin.Listen = DefaultAdminListen
 	}
 	if cfg.Listen == "" {
 		cfg.Listen = DefaultListen

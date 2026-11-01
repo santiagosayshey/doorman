@@ -129,15 +129,12 @@ func TestReloadWarnsWhenRestartIsNeeded(t *testing.T) {
 func TestSIGHUPReloadsWhileServing(t *testing.T) {
 	up := okUpstream(t)
 	a, path, logs := newApp(t, configAllowing(up.URL, "/old", ""))
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
+	ln, adminLn := listeners(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	reload := make(chan struct{}, 1)
 	done := make(chan error, 1)
-	go func() { done <- a.serve(ctx, ln, reload) }()
+	go func() { done <- a.serve(ctx, ln, adminLn, reload) }()
 
 	writeFile(t, path, configAllowing(up.URL, "/new", ""))
 	reload <- struct{}{} // what main sends on SIGHUP or a saved file
@@ -170,13 +167,10 @@ func TestShutdownLetsInFlightRequestsFinish(t *testing.T) {
 	t.Cleanup(slow.Close)
 
 	a, _, _ := newApp(t, configAllowing(slow.URL, "/slow", ""))
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
+	ln, adminLn := listeners(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
-	go func() { done <- a.serve(ctx, ln, nil) }()
+	go func() { done <- a.serve(ctx, ln, adminLn, nil) }()
 
 	result := make(chan int, 1)
 	go func() {
@@ -200,4 +194,18 @@ func TestShutdownLetsInFlightRequestsFinish(t *testing.T) {
 	if err := <-done; err != nil {
 		t.Errorf("serve returned %v, want nil", err)
 	}
+}
+
+// listeners returns a proxy listener and an admin listener on free ports.
+func listeners(t *testing.T) (net.Listener, net.Listener) {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	adminLn, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ln, adminLn
 }

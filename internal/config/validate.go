@@ -88,8 +88,16 @@ func validateTop(cfg *Config, problems *[]string) {
 		}
 	}
 
-	if _, port, err := net.SplitHostPort(cfg.Listen); err != nil || port == "" {
+	_, port, err := net.SplitHostPort(cfg.Listen)
+	if err != nil || port == "" {
 		add("listen: %q is not host:port or :port", cfg.Listen)
+	}
+	_, adminPort, err := net.SplitHostPort(cfg.Admin.Listen)
+	switch {
+	case err != nil || adminPort == "":
+		add("admin.listen: %q is not host:port or :port", cfg.Admin.Listen)
+	case adminPort == port:
+		add("admin.listen: port %s is already used by listen", adminPort)
 	}
 
 	if cfg.Logging.Format != FormatText && cfg.Logging.Format != FormatJSON {

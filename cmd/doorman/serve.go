@@ -64,6 +64,10 @@ func (a *app) reload() {
 		return
 	}
 
+	if next.Admin.Listen != a.cfg.Admin.Listen {
+		a.log.Warn("admin.listen changed; restart to use it",
+			"current", a.cfg.Admin.Listen, "new", next.Admin.Listen)
+	}
 	if next.Listen != a.cfg.Listen {
 		a.log.Warn("listen changed; restart to use it", "current", a.cfg.Listen, "new", next.Listen)
 	}
@@ -95,7 +99,8 @@ func loggingSettings(cfg *config.Config) any {
 // serve runs the server on ln until ctx is cancelled, reloading the config
 // whenever reload receives. On cancel it stops accepting connections and
 // gives in-flight requests shutdownGrace to finish.
-func (a *app) serve(ctx context.Context, ln net.Listener, reload <-chan struct{}) error {
+func (a *app) serve(ctx context.Context, ln, adminLn net.Listener, reload <-chan struct{}) error {
+	admin := &http.Server{Handler: adminHandler(), ReadHeaderTimeout: 10 * time.Second}
 	server := &http.Server{
 		Handler: a,
 		// A client gets 10 seconds to send its headers. Without a limit, slow
@@ -103,8 +108,9 @@ func (a *app) serve(ctx context.Context, ln net.Listener, reload <-chan struct{}
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
-	failed := make(chan error, 1)
+	failed := make(chan error, 2)
 	go func() { failed <- server.Serve(ln) }()
+	go func() { failed <- admin.Serve(adminLn) }()
 
 	for {
 		select {
@@ -125,6 +131,7 @@ func (a *app) serve(ctx context.Context, ln net.Listener, reload <-chan struct{}
 			if err := server.Shutdown(shutdownCtx); err != nil {
 				a.log.Warn("in-flight requests were cut off", "error", err)
 			}
+			_ = admin.Shutdown(shutdownCtx)
 			a.log.Info("stopped")
 			return nil
 		}
