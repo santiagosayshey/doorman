@@ -14,6 +14,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"os"
+	"unicode/utf8"
 
 	"github.com/santiagosayshey/doorman/internal/config"
 )
@@ -79,15 +80,16 @@ func newHandler(
 	return NewPretty(w, level, color, whoWidth)
 }
 
-// whoWidth is the length of the longest "destination/key" in cfg, so every
-// request line's columns start at the same place. Keys added by a reload
-// can be longer; their lines just push the columns out a little.
+// whoWidth is the width of the widest "key → destination" in cfg, so every
+// request line's columns start at the same place. It counts characters, not
+// bytes: → is one column but three bytes, and fmt pads by characters. Keys
+// added by a reload can be wider; their lines just push the columns out.
 func whoWidth(cfg *config.Config) int {
 	widest := 0
 	for destName, dest := range cfg.Destinations {
-		widest = max(widest, len(destName))
+		widest = max(widest, utf8.RuneCountInString(destName))
 		for keyName := range dest.Keys {
-			widest = max(widest, len(destName)+1+len(keyName))
+			widest = max(widest, utf8.RuneCountInString(Who(keyName, destName)))
 		}
 	}
 	return widest

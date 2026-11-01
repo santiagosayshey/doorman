@@ -15,8 +15,8 @@ import (
 // Pretty is a slog.Handler for people reading logs in a terminal. Request
 // records (event=request) become fixed columns, like an access log:
 //
-//	12:35:31.514 │ INFO │ radarr/tester │ GET    /api/v3/system/status      200 · 27ms
-//	12:35:33.029 │ WARN │ radarr/tester │ DELETE /api/v3/movie/1            denied · no rule
+//	12:35:31.514 │ INFO │ tester → radarr │ GET    /api/v3/system/status      200 · 27ms
+//	12:35:33.029 │ WARN │ tester → radarr │ DELETE /api/v3/movie/1            denied · no rule
 //
 // Any other record is its message followed by its fields.
 type Pretty struct {
@@ -36,6 +36,16 @@ type Pretty struct {
 // destination/key column; 0 means no padding.
 func NewPretty(w io.Writer, level slog.Leveler, color bool, whoWidth int) *Pretty {
 	return &Pretty{w: w, mu: &sync.Mutex{}, level: level, color: color, whoWidth: whoWidth}
+}
+
+// Who is the column that says which key reached which destination, in the
+// direction the request travels: "profilarr → radarr", or just the
+// destination when there's no key.
+func Who(key, destination string) string {
+	if key == "" {
+		return destination
+	}
+	return key + " → " + destination
 }
 
 // UseColor reports whether w is a terminal that should get colors: not a
@@ -113,11 +123,7 @@ func (h *Pretty) Handle(_ context.Context, r slog.Record) error {
 
 // writeRequest lays a request record out in columns: who, what, outcome.
 func (h *Pretty) writeRequest(b *bytes.Buffer, msg string, f map[string]string, sep string) {
-	who := f["destination"]
-	if f["key"] != "" {
-		who += "/" + f["key"]
-	}
-	fmt.Fprintf(b, "%-*s", h.whoWidth, who)
+	fmt.Fprintf(b, "%-*s", h.whoWidth, Who(f["key"], f["destination"]))
 	b.WriteString(sep)
 	fmt.Fprintf(b, "%-*s %-*s ", methodWidth, f["method"], pathWidth, cut(f["path"], pathWidth))
 

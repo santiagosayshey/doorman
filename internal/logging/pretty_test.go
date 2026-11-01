@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 func prettyLogger(color bool) (*slog.Logger, *bytes.Buffer) {
@@ -22,9 +23,9 @@ func TestPrettyRequestColumns(t *testing.T) {
 
 	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
 	wants := []string{
-		"│ INFO  │ radarr/tester │ GET    /api/v3/system/status            200 · 27ms",
-		"│ WARN  │ radarr/tester │ DELETE /api/v3/movie/1                  denied · no rule",
-		"│ WARN  │ radarr/tester │ GET    /api/v3/system/status            rate limited · retry in 20s",
+		"│ INFO  │ tester → radarr │ GET    /api/v3/system/status            200 · 27ms",
+		"│ WARN  │ tester → radarr │ DELETE /api/v3/movie/1                  denied · no rule",
+		"│ WARN  │ tester → radarr │ GET    /api/v3/system/status            rate limited · retry in 20s",
 	}
 	for i, want := range wants {
 		if !strings.HasSuffix(lines[i], want) {
@@ -92,7 +93,9 @@ func TestUseColorIsOffForBuffersAndNoColor(t *testing.T) {
 
 func TestPrettyPadsTheWhoColumn(t *testing.T) {
 	var buf bytes.Buffer
-	log := slog.New(NewPretty(&buf, slog.LevelInfo, false, len("radarr/homepage")))
+	log := slog.New(
+		NewPretty(&buf, slog.LevelInfo, false, utf8.RuneCountInString(Who("homepage", "radarr"))),
+	)
 	for _, who := range [][2]string{{"radarr", "homepage"}, {"radarr", "tv"}} {
 		log.Info("allowed", "event", "request", "destination", who[0], "key", who[1],
 			"method", "GET", "path", "/api", "status", 200, "ms", 1)
@@ -101,5 +104,14 @@ func TestPrettyPadsTheWhoColumn(t *testing.T) {
 	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
 	if strings.Index(lines[0], "GET") != strings.Index(lines[1], "GET") {
 		t.Errorf("the method column should line up:\n%s", buf.String())
+	}
+}
+
+func TestWho(t *testing.T) {
+	if got := Who("profilarr", "radarr"); got != "profilarr → radarr" {
+		t.Errorf("Who = %q", got)
+	}
+	if got := Who("", "radarr"); got != "radarr" {
+		t.Errorf("Who without a key = %q, want just the destination", got)
 	}
 }
