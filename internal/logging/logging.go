@@ -44,19 +44,21 @@ func Setup(cfg *config.Config, stdout io.Writer) (*slog.Logger, func() error, er
 			return nil, nil, err
 		}
 		files[name] = f
-		destinations[name] = newHandler(f, cfg.Logging.Format, dest.Log.Level.Slog())
+		// Files never get colors, which would show up as escape codes.
+		destinations[name] = newHandler(f, cfg.Logging.Format, dest.Log.Level.Slog(), false)
 	}
 
-	router := NewRouter(newHandler(stdout, cfg.Logging.Format, cfg.Logging.Level.Slog()), destinations)
+	stdoutHandler := newHandler(stdout, cfg.Logging.Format, cfg.Logging.Level.Slog(), UseColor(stdout))
+	router := NewRouter(stdoutHandler, destinations)
 	return slog.New(router), closeAll, nil
 }
 
-func newHandler(w io.Writer, format config.Format, level slog.Level) slog.Handler {
-	opts := &slog.HandlerOptions{Level: level}
+// newHandler returns JSON for log tools, or the Pretty layout for people.
+func newHandler(w io.Writer, format config.Format, level slog.Level, color bool) slog.Handler {
 	if format == config.FormatJSON {
-		return slog.NewJSONHandler(w, opts)
+		return slog.NewJSONHandler(w, &slog.HandlerOptions{Level: level})
 	}
-	return slog.NewTextHandler(w, opts)
+	return NewPretty(w, level, color)
 }
 
 // Router is a slog.Handler that sends every record to stdout and records

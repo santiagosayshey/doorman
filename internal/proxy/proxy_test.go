@@ -183,3 +183,13 @@ func TestDecisionsAreLoggedWithoutTheQuery(t *testing.T) {
 		}
 	}
 }
+
+func TestEncodedPathIsLoggedAsSent(t *testing.T) {
+	up := newUpstream(t)
+	h, logs := setup(t, up.server.URL)
+
+	send(h, http.MethodGet, "/api/v3/movie%2F5", "homepage-secret")
+	if !strings.Contains(logs.String(), "path=/api/v3/movie%2F5") {
+		t.Errorf("the refused path should be logged still encoded:\n%s", logs.String())
+	}
+}

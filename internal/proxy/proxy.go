@@ -78,7 +78,7 @@ func newForwarder(target *url.URL, headers map[string]string, sources []config.A
 			}
 		},
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
-			log.Warn("destination unreachable", "event", "request", "method", r.Method, "path", r.URL.Path, "error", err)
+			log.Warn("destination unreachable", "event", "request", "method", r.Method, "path", r.URL.EscapedPath(), "error", err)
 			w.WriteHeader(http.StatusBadGateway)
 		},
 	}
@@ -100,8 +100,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// The query string is never logged: it can hold secrets and personal data.
-	log := k.log.With("event", "request", "method", r.Method, "path", r.URL.Path)
+	// The path is logged as the client sent it, still encoded, so a %2F shows
+	// up as %2F. The query string is never logged: it can hold secrets and
+	// personal data.
+	log := k.log.With("event", "request", "method", r.Method, "path", r.URL.EscapedPath())
 
 	// 2. Is the path unambiguous?
 	p, err := matchPath(r.URL)
