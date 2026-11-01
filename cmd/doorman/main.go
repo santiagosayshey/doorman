@@ -1,12 +1,15 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
-	"net/http"
+	"net"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/santiagosayshey/doorman/internal/config"
@@ -41,8 +44,12 @@ func runValidate(args []string) int {
 func runProxy(args []string) int {
 	flags := flag.NewFlagSet("doorman", flag.ExitOnError)
 	path := flags.String("c", "doorman.yaml", "config file")
+	watch := flags.Bool("watch", true, "reload the config when the file changes")
 	_ = flags.Parse(args)
 
+	// Fingerprint the file before loading it, so the watcher can't miss a
+	// save that lands in between.
+	loaded, _ := fingerprint(*path)
 	cfg, ok := load(*path)
 	if !ok {
 		return 1
@@ -61,17 +68,34 @@ func runProxy(args []string) int {
 		log.Error("building the proxy failed", "error", err)
 		return 1
 	}
+	a := &app{path: *path, log: log, cfg: cfg}
+	a.handler.Store(handler)
 
-	server := &http.Server{
-		Addr:    cfg.Listen,
-		Handler: handler,
-		// A client gets 10 seconds to send its headers. Without a limit, slow
-		// clients could hold connections open forever.
-		ReadHeaderTimeout: 10 * time.Second,
+	ln, err := net.Listen("tcp", cfg.Listen)
+	if err != nil {
+		log.Error("can't listen", "listen", cfg.Listen, "error", err)
+		return 1
+	}
+
+	// Ctrl+C and docker stop shut down gracefully.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	// SIGHUP and, unless -watch=false, saving the file both reload the config.
+	reload := make(chan struct{}, 1)
+	hup := make(chan os.Signal, 1)
+	signal.Notify(hup, syscall.SIGHUP)
+	go func() {
+		for range hup {
+			reload <- struct{}{}
+		}
+	}()
+	if *watch {
+		go watchFile(ctx, *path, loaded, time.Second, reload)
 	}
 
 	announceStartup(log, cfg, *path)
-	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+	if err := a.serve(ctx, ln, reload); err != nil {
 		log.Error("server stopped", "error", err)
 		return 1
 	}
