@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"maps"
+	"net"
 	"net/url"
 	"path"
 	"regexp"
@@ -81,6 +82,10 @@ func validateTop(cfg *Config, problems *Problems) {
 		} else {
 			add("version: %d is not supported; 1 is the only supported version", cfg.Version)
 		}
+	}
+
+	if _, port, err := net.SplitHostPort(cfg.Listen); err != nil || port == "" {
+		add("listen: %q is not host:port or :port", cfg.Listen)
 	}
 
 	if cfg.Logging.Format != FormatText && cfg.Logging.Format != FormatJSON {

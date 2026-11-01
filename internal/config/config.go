@@ -19,6 +19,7 @@ import (
 // Config is a whole Doorman config file.
 type Config struct {
 	Version      int                    `yaml:"version"`
+	Listen       string                 `yaml:"listen"`
 	Logging      Logging                `yaml:"logging"`
 	ClientAuth   []AuthSource           `yaml:"client_auth"`
 	Destinations map[string]Destination `yaml:"destinations"`
@@ -56,6 +57,9 @@ type Rule struct {
 	// Limit is required: "N/s", "N/m", "N/h", "N/d" or "none".
 	Limit Limit `yaml:"limit"`
 }
+
+// DefaultListen is the address the proxy serves on when listen is left out.
+const DefaultListen = ":8800"
 
 // DefaultClientAuth is used when the file has no client_auth section.
 var DefaultClientAuth = []AuthSource{{Header: "X-Api-Key"}}
@@ -102,6 +106,9 @@ func Parse(data []byte, lookupEnv func(string) (string, bool)) (*Config, error) 
 
 	if cfg.ClientAuth == nil {
 		cfg.ClientAuth = DefaultClientAuth
+	}
+	if cfg.Listen == "" {
+		cfg.Listen = DefaultListen
 	}
 	if cfg.Logging.Format == "" {
 		cfg.Logging.Format = FormatText

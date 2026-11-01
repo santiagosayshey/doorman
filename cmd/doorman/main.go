@@ -4,20 +4,21 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
-	"net/http/httputil"
-	"net/url"
 	"os"
+	"time"
 
 	"github.com/santiagosayshey/doorman/internal/config"
+	"github.com/santiagosayshey/doorman/internal/logging"
+	"github.com/santiagosayshey/doorman/internal/proxy"
 )
 
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "validate" {
 		os.Exit(runValidate(os.Args[2:]))
 	}
-	runProxy()
+	os.Exit(runProxy(os.Args[1:]))
 }
 
 // runValidate checks a config file and lists every problem in it.
@@ -27,59 +28,71 @@ func runValidate(args []string) int {
 	path := flags.String("c", "doorman.yaml", "config file to check")
 	_ = flags.Parse(args) // ExitOnError: a bad flag exits before this returns
 
-	cfg, err := config.Load(*path)
-
-	var problems config.Problems
-	switch {
-	case errors.As(err, &problems):
-		fmt.Printf("✗ %d problem(s) in %s\n", len(problems), *path)
-		for _, p := range problems {
-			fmt.Printf("  %s\n", p)
-		}
-		return 1
-	case err != nil: // the file couldn't be read at all
-		fmt.Printf("✗ %v\n", err)
+	cfg, ok := load(*path)
+	if !ok {
 		return 1
 	}
-
 	destinations, keys := count(cfg)
 	fmt.Printf("✓ %s is valid: %s, %s\n", *path, plural(destinations, "destination"), plural(keys, "key"))
 	return 0
 }
 
-// runProxy forwards everything to one Radarr. Stage 4 replaces it with the
-// config-driven proxy.
-func runProxy() {
-	log.Println("DOORMAN STARTING!")
+// runProxy loads the config and serves until the server stops.
+func runProxy(args []string) int {
+	flags := flag.NewFlagSet("doorman", flag.ExitOnError)
+	path := flags.String("c", "doorman.yaml", "config file")
+	_ = flags.Parse(args)
 
-	radarr_url := os.Getenv("RADARR_URL")
-
-	// envs
-	if radarr_url == "" {
-		log.Fatal("RADARR_URL is not set")
+	cfg, ok := load(*path)
+	if !ok {
+		return 1
 	}
 
-	radarr_api_key := os.Getenv("RADARR_API_KEY")
-
-	if radarr_api_key == "" {
-		log.Fatal("RADARR_API_KEY is not set")
-	}
-
-	// parse the url
-	target, err := url.Parse(radarr_url)
+	log, closeLogs, err := logging.Setup(cfg, os.Stdout)
 	if err != nil {
-		log.Fatalf("RADARR_URL is invalid: %v", err)
+		fmt.Printf("✗ opening log files: %v\n", err)
+		return 1
+	}
+	defer closeLogs()
+	slog.SetDefault(log)
+
+	handler, err := proxy.New(cfg, log)
+	if err != nil {
+		log.Error("building the proxy failed", "error", err)
+		return 1
 	}
 
-	if target.Scheme == "" || target.Host == "" {
-		log.Fatal("RADARR_URL must be a full URL like http://localhost:7878")
+	server := &http.Server{
+		Addr:    cfg.Listen,
+		Handler: handler,
+		// A client gets 10 seconds to send its headers. Without a limit, slow
+		// clients could hold connections open forever.
+		ReadHeaderTimeout: 10 * time.Second,
 	}
 
-	proxy := &httputil.ReverseProxy{
-		Rewrite: func(pr *httputil.ProxyRequest) {
-			pr.SetURL(target)
-			pr.Out.Header.Set("X-Api-Key", radarr_api_key)
-		},
+	announceStartup(os.Stdout, log, cfg, *path, cfg.Listen)
+	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		log.Error("server stopped", "error", err)
+		return 1
 	}
-	log.Fatal(http.ListenAndServe(":8800", proxy))
+	return 0
+}
+
+// load reads the config, printing every problem when it isn't valid.
+func load(path string) (*config.Config, bool) {
+	cfg, err := config.Load(path)
+
+	var problems config.Problems
+	switch {
+	case errors.As(err, &problems):
+		fmt.Printf("✗ %d problem(s) in %s\n", len(problems), path)
+		for _, p := range problems {
+			fmt.Printf("  %s\n", p)
+		}
+		return nil, false
+	case err != nil: // the file couldn't be read at all
+		fmt.Printf("✗ %v\n", err)
+		return nil, false
+	}
+	return cfg, true
 }

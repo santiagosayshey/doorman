@@ -53,6 +53,11 @@ func TestParse(t *testing.T) {
 		// unknown fields
 		{"misspelled field", strings.Replace(valid, "allow:", "alow:", 1), []string{"field alow not found"}},
 
+		// listen
+		{"listen port only", "listen: :9000\n" + valid, nil},
+		{"listen host and port", "listen: 127.0.0.1:9000\n" + valid, nil},
+		{"listen without port", "listen: localhost\n" + valid, []string{`listen: "localhost" is not host:port`}},
+
 		// logging
 		{"logging json", "logging:\n  level: debug\n  format: json\n" + valid, nil},
 		{"logging format unknown", "logging:\n  format: xml\n" + valid, []string{`logging.format: "xml" is not text or json`}},
@@ -292,6 +297,9 @@ func TestLoggingDefaults(t *testing.T) {
 	cfg, err := Parse([]byte(valid), lookup)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if cfg.Listen != ":8800" {
+		t.Errorf("listen default = %q, want :8800", cfg.Listen)
 	}
 	if cfg.Logging.Format != FormatText || cfg.Logging.Level.Slog() != slog.LevelInfo {
 		t.Errorf("logging defaults = %+v, want text at info", cfg.Logging)
