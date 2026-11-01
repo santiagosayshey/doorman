@@ -19,6 +19,7 @@ import (
 // Config is a whole Doorman config file.
 type Config struct {
 	Version      int                    `yaml:"version"`
+	Logging      Logging                `yaml:"logging"`
 	ClientAuth   []AuthSource           `yaml:"client_auth"`
 	Destinations map[string]Destination `yaml:"destinations"`
 }
@@ -34,7 +35,9 @@ type AuthSource struct {
 type Destination struct {
 	URL     string            `yaml:"url"`
 	Headers map[string]string `yaml:"headers"`
-	Keys    map[string]Key    `yaml:"keys"`
+	// Log is optional: nil means this destination logs to stdout only.
+	Log  *DestinationLog `yaml:"log"`
+	Keys map[string]Key  `yaml:"keys"`
 }
 
 // Key is one client's grant on its destination: a secret and what it may do.
@@ -99,6 +102,9 @@ func Parse(data []byte, lookupEnv func(string) (string, bool)) (*Config, error) 
 
 	if cfg.ClientAuth == nil {
 		cfg.ClientAuth = DefaultClientAuth
+	}
+	if cfg.Logging.Format == "" {
+		cfg.Logging.Format = FormatText
 	}
 
 	validateTop(&cfg, &problems)

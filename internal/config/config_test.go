@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"log/slog"
 	"strings"
 	"testing"
 	"time"
@@ -51,6 +52,30 @@ func TestParse(t *testing.T) {
 
 		// unknown fields
 		{"misspelled field", strings.Replace(valid, "allow:", "alow:", 1), []string{"field alow not found"}},
+
+		// logging
+		{"logging json", "logging:\n  level: debug\n  format: json\n" + valid, nil},
+		{"logging format unknown", "logging:\n  format: xml\n" + valid, []string{`logging.format: "xml" is not text or json`}},
+		{"logging level unknown", "logging:\n  level: verbose\n" + valid, []string{`level "verbose" is not debug`}},
+		{"logging level upper case", "logging:\n  level: INFO\n" + valid, []string{`level "INFO" is not debug`}},
+		{"destination log", strings.Replace(valid, "    keys:", "    log:\n      path: /logs/radarr.log\n      level: warn\n    keys:", 1), nil},
+		{"destination log without path", strings.Replace(valid, "    keys:", "    log:\n      level: warn\n    keys:", 1),
+			[]string{"destinations.radarr.log.path: required"}},
+		{"destination log bad level", strings.Replace(valid, "    keys:", "    log:\n      path: /l\n      level: loud\n    keys:", 1),
+			[]string{`level "loud" is not`}},
+		{"destination log path shared", strings.Replace(valid, "    keys:", "    log:\n      path: /logs/shared.log\n    keys:", 1) + `
+  sonarr:
+    url: http://sonarr:8989
+    log:
+      path: /logs/shared.log
+    keys:
+      tv:
+        secret: ${AUTOBRR_KEY}
+        allow:
+          - method: GET
+            path: /api/v3/series
+            limit: none
+`, []string{"destinations.sonarr.log.path: same file as radarr"}},
 
 		// client_auth
 		{"client_auth header and query", "client_auth:\n  - header: X-Api-Key\n    query: apikey\n" + valid,
@@ -260,5 +285,18 @@ func TestBadLimitReportedOnce(t *testing.T) {
 	var problems Problems
 	if !errors.As(err, &problems) || len(problems) != 1 {
 		t.Fatalf("expected exactly 1 problem, got:\n%v", err)
+	}
+}
+
+func TestLoggingDefaults(t *testing.T) {
+	cfg, err := Parse([]byte(valid), lookup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Logging.Format != FormatText || cfg.Logging.Level.Slog() != slog.LevelInfo {
+		t.Errorf("logging defaults = %+v, want text at info", cfg.Logging)
+	}
+	if cfg.Destinations["radarr"].Log != nil {
+		t.Errorf("a destination without log should have a nil Log")
 	}
 }

@@ -83,6 +83,10 @@ func validateTop(cfg *Config, problems *Problems) {
 		}
 	}
 
+	if cfg.Logging.Format != FormatText && cfg.Logging.Format != FormatJSON {
+		add("logging.format: %q is not text or json", cfg.Logging.Format)
+	}
+
 	if len(cfg.ClientAuth) == 0 {
 		add("client_auth: must list at least one place to read the key from, or be left out for the default")
 	}
@@ -109,6 +113,9 @@ func validateDestinations(cfg *Config, unset map[string]bool, problems *Problems
 
 	// secret -> "destination/key" that first used it, to catch duplicates.
 	owners := map[string]string{}
+	// log path -> destination that first used it; two writers on one file
+	// would interleave and corrupt each other's lines.
+	logPaths := map[string]string{}
 
 	for _, destName := range sorted(cfg.Destinations) {
 		dest := cfg.Destinations[destName]
@@ -116,6 +123,17 @@ func validateDestinations(cfg *Config, unset map[string]bool, problems *Problems
 
 		if !unset[at+".url"] {
 			validateURL(at+".url", dest.URL, add)
+		}
+
+		if dest.Log != nil {
+			switch owner, taken := logPaths[dest.Log.Path]; {
+			case dest.Log.Path == "":
+				add("%s.log.path: required", at)
+			case taken:
+				add("%s.log.path: same file as %s; every destination needs its own", at, owner)
+			default:
+				logPaths[dest.Log.Path] = destName
+			}
 		}
 
 		for _, header := range sorted(dest.Headers) {
