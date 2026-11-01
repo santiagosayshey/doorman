@@ -8,7 +8,6 @@ package config
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -118,7 +117,8 @@ func Parse(data []byte, lookupEnv func(string) (string, bool)) (*Config, error) 
 		var typeErr *yaml.TypeError
 		if !errors.As(err, &typeErr) {
 			// A syntax error stops the parser, so it can only be reported alone.
-			return nil, &ValidationError{Problems: []string{fmt.Sprintf("yaml: %v", err)}}
+			// The library's errors already start with "yaml: ".
+			return nil, &ValidationError{Problems: []string{err.Error()}}
 		}
 		problems = append(problems, typeErr.Errors...)
 	}
