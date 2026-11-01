@@ -53,15 +53,30 @@ func TestRuleMatches(t *testing.T) {
 	}{
 		{config.Rule{Method: "GET", Path: "/api/v3/movie"}, "GET", "/api/v3/movie", true},
 		{config.Rule{Method: "GET", Path: "/api/v3/movie"}, "POST", "/api/v3/movie", false},
-		{config.Rule{Method: "GET", Path: "/api/v3/movie"}, "HEAD", "/api/v3/movie", false}, // GET doesn't imply HEAD
+		{
+			config.Rule{Method: "GET", Path: "/api/v3/movie"},
+			"HEAD",
+			"/api/v3/movie",
+			false,
+		}, // GET doesn't imply HEAD
 		{config.Rule{Method: "GET", Path: "/api/v3/movie"}, "GET", "/api/v3/movie/5", false},
 		{config.Rule{Method: "GET", Path: "/api/v3/movie"}, "GET", "/api/v3", false},
-		{config.Rule{Method: "GET", Path: "/api/v3/movie"}, "GET", "/API/v3/movie", false}, // case-sensitive
+		{
+			config.Rule{Method: "GET", Path: "/api/v3/movie"},
+			"GET",
+			"/API/v3/movie",
+			false,
+		}, // case-sensitive
 
 		{config.Rule{Method: "GET", Path: "/api/v3/movie/{id}"}, "GET", "/api/v3/movie/5", true},
 		{config.Rule{Method: "GET", Path: "/api/v3/movie/{id}"}, "GET", "/api/v3/movie/abc", true},
 		{config.Rule{Method: "GET", Path: "/api/v3/movie/{id}"}, "GET", "/api/v3/movie", false},
-		{config.Rule{Method: "GET", Path: "/api/v3/movie/{id}"}, "GET", "/api/v3/movie/5/files", false}, // one segment only
+		{
+			config.Rule{Method: "GET", Path: "/api/v3/movie/{id}"},
+			"GET",
+			"/api/v3/movie/5/files",
+			false,
+		}, // one segment only
 
 		{config.Rule{Method: "GET", Path: "/"}, "GET", "/", true},
 		{config.Rule{Method: "GET", Path: "/"}, "GET", "/api", false},
@@ -69,7 +84,15 @@ func TestRuleMatches(t *testing.T) {
 	for _, tc := range cases {
 		got := compileRule(tc.rule).matches(tc.method, tc.path)
 		if got != tc.want {
-			t.Errorf("%s %s against %s %s = %v, want %v", tc.method, tc.path, tc.rule.Method, tc.rule.Path, got, tc.want)
+			t.Errorf(
+				"%s %s against %s %s = %v, want %v",
+				tc.method,
+				tc.path,
+				tc.rule.Method,
+				tc.rule.Path,
+				got,
+				tc.want,
+			)
 		}
 	}
 }

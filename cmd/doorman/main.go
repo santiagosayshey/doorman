@@ -36,7 +36,12 @@ func runValidate(args []string) int {
 		return 1
 	}
 	destinations, keys := count(cfg)
-	fmt.Printf("✓ %s is valid: %s, %s\n", *path, plural(destinations, "destination"), plural(keys, "key"))
+	fmt.Printf(
+		"✓ %s is valid: %s, %s\n",
+		*path,
+		plural(destinations, "destination"),
+		plural(keys, "key"),
+	)
 	return 0
 }
 

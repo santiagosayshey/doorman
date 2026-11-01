@@ -58,7 +58,10 @@ func New(cfg *config.Config, log *slog.Logger) (*Handler, error) {
 				log:     destLog.With("key", keyName),
 			}
 			for _, r := range k.Allow {
-				compiled.rules = append(compiled.rules, limitedRule{rule: compileRule(r), limiter: newLimiter(r.Limit)})
+				compiled.rules = append(
+					compiled.rules,
+					limitedRule{rule: compileRule(r), limiter: newLimiter(r.Limit)},
+				)
 			}
 			h.keys[hashSecret(k.Secret)] = compiled
 		}
@@ -68,7 +71,12 @@ func New(cfg *config.Config, log *slog.Logger) (*Handler, error) {
 
 // newForwarder sends allowed requests to target unchanged, except that the
 // client's credentials are removed and the destination's headers are set.
-func newForwarder(target *url.URL, headers map[string]string, sources []config.AuthSource, log *slog.Logger) *httputil.ReverseProxy {
+func newForwarder(
+	target *url.URL,
+	headers map[string]string,
+	sources []config.AuthSource,
+	log *slog.Logger,
+) *httputil.ReverseProxy {
 	return &httputil.ReverseProxy{
 		Rewrite: func(pr *httputil.ProxyRequest) {
 			pr.SetURL(target)
@@ -78,7 +86,17 @@ func newForwarder(target *url.URL, headers map[string]string, sources []config.A
 			}
 		},
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
-			log.Warn("destination unreachable", "event", "request", "method", r.Method, "path", r.URL.EscapedPath(), "error", err)
+			log.Warn(
+				"destination unreachable",
+				"event",
+				"request",
+				"method",
+				r.Method,
+				"path",
+				r.URL.EscapedPath(),
+				"error",
+				err,
+			)
 			w.WriteHeader(http.StatusBadGateway)
 		},
 	}

@@ -48,7 +48,12 @@ func Setup(cfg *config.Config, stdout io.Writer) (*slog.Logger, func() error, er
 		destinations[name] = newHandler(f, cfg.Logging.Format, dest.Log.Level.Slog(), false)
 	}
 
-	stdoutHandler := newHandler(stdout, cfg.Logging.Format, cfg.Logging.Level.Slog(), UseColor(stdout))
+	stdoutHandler := newHandler(
+		stdout,
+		cfg.Logging.Format,
+		cfg.Logging.Level.Slog(),
+		UseColor(stdout),
+	)
 	router := NewRouter(stdoutHandler, destinations)
 	return slog.New(router), closeAll, nil
 }

@@ -19,7 +19,13 @@ import (
 // Take last before loading the config. If the file changes in between, the
 // watcher sees the difference and reloads; taken after, that save would be
 // missed.
-func watchFile(ctx context.Context, path string, last [sha256.Size]byte, every time.Duration, changed chan<- struct{}) {
+func watchFile(
+	ctx context.Context,
+	path string,
+	last [sha256.Size]byte,
+	every time.Duration,
+	changed chan<- struct{},
+) {
 	var pending [sha256.Size]byte // new content waiting to prove it's stable
 	var waiting bool
 

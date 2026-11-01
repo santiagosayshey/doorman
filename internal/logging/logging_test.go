@@ -73,7 +73,11 @@ func TestUnknownDestinationGoesToStdoutOnly(t *testing.T) {
 	log.With(DestinationKey, "sonarr").Info("allowed")
 
 	if !strings.Contains(stdout.String(), "allowed") || radarr.Len() != 0 {
-		t.Errorf("a destination without a file should log to stdout only; stdout=%q radarr=%q", stdout, radarr)
+		t.Errorf(
+			"a destination without a file should log to stdout only; stdout=%q radarr=%q",
+			stdout,
+			radarr,
+		)
 	}
 }
 

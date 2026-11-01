@@ -25,7 +25,14 @@ func TestClientKey(t *testing.T) {
 		{"same key in both", "/api?apikey=k1", "k1", bothSources, "k1", nil},
 		{"different keys", "/api?apikey=k2", "k1", bothSources, "", errConflicting},
 		{"no key", "/api", "", bothSources, "", errNoKey},
-		{"query not a configured source", "/api?apikey=k1", "", []config.AuthSource{{Header: "X-Api-Key"}}, "", errNoKey},
+		{
+			"query not a configured source",
+			"/api?apikey=k1",
+			"",
+			[]config.AuthSource{{Header: "X-Api-Key"}},
+			"",
+			errNoKey,
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -42,7 +49,11 @@ func TestClientKey(t *testing.T) {
 }
 
 func TestStripAuth(t *testing.T) {
-	r := httptest.NewRequest(http.MethodGet, "/api/v3/moviefile?movieId=1&apikey=k1&movieId=2&b=%20x", nil)
+	r := httptest.NewRequest(
+		http.MethodGet,
+		"/api/v3/moviefile?movieId=1&apikey=k1&movieId=2&b=%20x",
+		nil,
+	)
 	r.Header.Set("X-Api-Key", "k1")
 	r.Header.Set("Accept", "application/json")
 

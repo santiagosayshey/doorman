@@ -42,7 +42,13 @@ func (a *app) reload() {
 	if err != nil {
 		var problems config.Problems
 		if errors.As(err, &problems) {
-			a.log.Error("reload failed, keeping the current config", "config", a.path, "problems", len(problems))
+			a.log.Error(
+				"reload failed, keeping the current config",
+				"config",
+				a.path,
+				"problems",
+				len(problems),
+			)
 			for _, p := range problems {
 				a.log.Error("reload problem", "problem", p)
 			}
@@ -107,7 +113,11 @@ func (a *app) serve(ctx context.Context, ln net.Listener, reload <-chan struct{}
 		case err := <-failed:
 			return err
 		case <-ctx.Done():
-			a.log.Info("shutting down, letting in-flight requests finish", "grace", shutdownGrace.String())
+			a.log.Info(
+				"shutting down, letting in-flight requests finish",
+				"grace",
+				shutdownGrace.String(),
+			)
 			shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownGrace)
 			defer cancel()
 			if err := server.Shutdown(shutdownCtx); err != nil {

@@ -33,7 +33,11 @@ func sorted[V any](m map[string]V) []string {
 // value can never change the YAML's structure. Unset variables are problems,
 // never empty strings. It returns the fields that had one, so validation
 // doesn't report them a second time.
-func expandEnv(cfg *Config, lookupEnv func(string) (string, bool), problems *Problems) map[string]bool {
+func expandEnv(
+	cfg *Config,
+	lookupEnv func(string) (string, bool),
+	problems *Problems,
+) map[string]bool {
 	unset := map[string]bool{}
 	expand := func(field, value string) string {
 		return envRef.ReplaceAllStringFunc(value, func(ref string) string {
@@ -93,7 +97,9 @@ func validateTop(cfg *Config, problems *Problems) {
 	}
 
 	if len(cfg.ClientAuth) == 0 {
-		add("client_auth: must list at least one place to read the key from, or be left out for the default")
+		add(
+			"client_auth: must list at least one place to read the key from, or be left out for the default",
+		)
 	}
 	for i, source := range cfg.ClientAuth {
 		at := fmt.Sprintf("client_auth[%d]", i)
@@ -164,7 +170,10 @@ func validateDestinations(cfg *Config, unset map[string]bool, problems *Problems
 			}
 
 			if len(key.Allow) == 0 {
-				add("%s.allow: at least one rule is required; a key that allows nothing is a mistake", keyAt)
+				add(
+					"%s.allow: at least one rule is required; a key that allows nothing is a mistake",
+					keyAt,
+				)
 			}
 			for i, rule := range key.Allow {
 				validateRule(fmt.Sprintf("%s.allow[%d]", keyAt, i), rule, add)
@@ -197,7 +206,11 @@ func validateRule(at string, rule Rule, add func(string, ...any)) {
 	case rule.Method == "":
 		add("%s.method: required", at)
 	case !validMethods[rule.Method]:
-		add("%s.method: %q is not one of GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS (upper case)", at, rule.Method)
+		add(
+			"%s.method: %q is not one of GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS (upper case)",
+			at,
+			rule.Method,
+		)
 	}
 
 	validateRulePath(at+".path", rule.Path, add)

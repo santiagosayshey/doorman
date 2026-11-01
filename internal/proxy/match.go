@@ -20,7 +20,8 @@ var errUnclearPath = errors.New("unclear path")
 func matchPath(u *url.URL) (string, error) {
 	raw := u.EscapedPath()
 	lower := strings.ToLower(raw)
-	if strings.Contains(lower, "%2f") || strings.Contains(lower, "%5c") || strings.Contains(u.Path, `\`) {
+	if strings.Contains(lower, "%2f") || strings.Contains(lower, "%5c") ||
+		strings.Contains(u.Path, `\`) {
 		return "", errUnclearPath
 	}
 

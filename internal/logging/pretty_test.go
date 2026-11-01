@@ -37,14 +37,29 @@ func TestPrettyGenericRecord(t *testing.T) {
 	log, buf := prettyLogger(false)
 	log.Info("doorman started", "listen", "127.0.0.1:8800", "keys", 1)
 
-	if !strings.HasSuffix(strings.TrimSpace(buf.String()), "│ INFO  │ doorman started  listen=127.0.0.1:8800  keys=1") {
+	if !strings.HasSuffix(
+		strings.TrimSpace(buf.String()),
+		"│ INFO  │ doorman started  listen=127.0.0.1:8800  keys=1",
+	) {
 		t.Errorf("got %q", buf.String())
 	}
 }
 
 func TestPrettyCutsLongPaths(t *testing.T) {
 	log, buf := prettyLogger(false)
-	log.Info("allowed", "event", "request", "method", "GET", "path", "/api/v3/"+strings.Repeat("x", 60), "status", 200, "ms", 1)
+	log.Info(
+		"allowed",
+		"event",
+		"request",
+		"method",
+		"GET",
+		"path",
+		"/api/v3/"+strings.Repeat("x", 60),
+		"status",
+		200,
+		"ms",
+		1,
+	)
 
 	if !strings.Contains(buf.String(), "x… 200") {
 		t.Errorf("a long path should be cut with …, got %q", buf.String())

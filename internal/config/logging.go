@@ -47,7 +47,11 @@ func (l *Level) UnmarshalYAML(node *yaml.Node) error {
 	level, ok := levelNames[node.Value]
 	if node.Kind != yaml.ScalarNode || !ok {
 		return &yaml.TypeError{Errors: []string{
-			fmt.Sprintf("line %d: level %q is not debug, info, warn or error", node.Line, node.Value),
+			fmt.Sprintf(
+				"line %d: level %q is not debug, info, warn or error",
+				node.Line,
+				node.Value,
+			),
 		}}
 	}
 	*l = Level(level)

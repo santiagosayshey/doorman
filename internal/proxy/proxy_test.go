@@ -93,7 +93,10 @@ func TestAllowedRequestIsForwardedWithTheDestinationsKey(t *testing.T) {
 		t.Errorf("path = %q, want it unchanged", up.last.URL.Path)
 	}
 	if up.last.URL.RawQuery != "include=files" {
-		t.Errorf("query = %q, want the client's key removed and the rest kept", up.last.URL.RawQuery)
+		t.Errorf(
+			"query = %q, want the client's key removed and the rest kept",
+			up.last.URL.RawQuery,
+		)
 	}
 }
 
@@ -107,11 +110,41 @@ func TestRefusals(t *testing.T) {
 	}{
 		{"no key", http.MethodGet, "/api/v3/movie", "", http.StatusUnauthorized},
 		{"unknown key", http.MethodGet, "/api/v3/movie", "guess", http.StatusUnauthorized},
-		{"conflicting keys", http.MethodGet, "/api/v3/movie?apikey=other", "homepage-secret", http.StatusUnauthorized},
-		{"method not allowed", http.MethodDelete, "/api/v3/movie/5", "homepage-secret", http.StatusForbidden},
-		{"path not allowed", http.MethodGet, "/api/v3/system/backup", "homepage-secret", http.StatusForbidden},
-		{"unclear path", http.MethodGet, "/api/v3/movie/../system/backup", "homepage-secret", http.StatusBadRequest},
-		{"encoded slash", http.MethodGet, "/api/v3/movie%2F5", "homepage-secret", http.StatusBadRequest},
+		{
+			"conflicting keys",
+			http.MethodGet,
+			"/api/v3/movie?apikey=other",
+			"homepage-secret",
+			http.StatusUnauthorized,
+		},
+		{
+			"method not allowed",
+			http.MethodDelete,
+			"/api/v3/movie/5",
+			"homepage-secret",
+			http.StatusForbidden,
+		},
+		{
+			"path not allowed",
+			http.MethodGet,
+			"/api/v3/system/backup",
+			"homepage-secret",
+			http.StatusForbidden,
+		},
+		{
+			"unclear path",
+			http.MethodGet,
+			"/api/v3/movie/../system/backup",
+			"homepage-secret",
+			http.StatusBadRequest,
+		},
+		{
+			"encoded slash",
+			http.MethodGet,
+			"/api/v3/movie%2F5",
+			"homepage-secret",
+			http.StatusBadRequest,
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -134,7 +167,12 @@ func TestRateLimit(t *testing.T) {
 	h, _ := setup(t, up.server.URL)
 
 	for range 2 {
-		if w := send(h, http.MethodGet, "/api/v3/movie", "homepage-secret"); w.Code != http.StatusOK {
+		if w := send(
+			h,
+			http.MethodGet,
+			"/api/v3/movie",
+			"homepage-secret",
+		); w.Code != http.StatusOK {
 			t.Fatalf("status = %d, want 200 within the limit", w.Code)
 		}
 	}
@@ -156,7 +194,12 @@ func TestUnreachableDestination(t *testing.T) {
 	up.server.Close() // nothing is listening any more
 
 	h, _ := setup(t, url)
-	if w := send(h, http.MethodGet, "/api/v3/movie/5", "homepage-secret"); w.Code != http.StatusBadGateway {
+	if w := send(
+		h,
+		http.MethodGet,
+		"/api/v3/movie/5",
+		"homepage-secret",
+	); w.Code != http.StatusBadGateway {
 		t.Errorf("status = %d, want 502", w.Code)
 	}
 }
