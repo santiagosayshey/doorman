@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"log/slog"
 
 	"github.com/santiagosayshey/doorman/internal/config"
@@ -13,20 +12,12 @@ import (
 //	go build -ldflags "-X main.version=0.1.0" ./cmd/doorman
 var version = "dev"
 
-// announceStartup prints the one-line banner, then logs the same details as
-// a structured record. The banner is skipped for JSON logs, where a
-// non-JSON line would break the tools that parse them.
-func announceStartup(w io.Writer, log *slog.Logger, cfg *config.Config, configPath, listen string) {
+// announceStartup logs that Doorman is up and what it loaded.
+func announceStartup(log *slog.Logger, cfg *config.Config, configPath string) {
 	destinations, keys := count(cfg)
-
-	if cfg.Logging.Format == config.FormatText {
-		fmt.Fprintf(w, "▌doorman %s ▸ %s ▸ %s ▸ %s\n",
-			version, listen, plural(destinations, "destination"), plural(keys, "key"))
-	}
-
-	log.Info("doorman started",
+	log.Info("🚪 doorman started",
 		"version", version,
-		"listen", listen,
+		"listen", cfg.Listen,
 		"config", configPath,
 		"destinations", destinations,
 		"keys", keys,

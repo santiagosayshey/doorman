@@ -19,28 +19,16 @@ func testConfig(format config.Format) *config.Config {
 	}
 }
 
-func TestBannerWithTextLogs(t *testing.T) {
-	var out, logs bytes.Buffer
-	announceStartup(&out, slog.New(slog.NewTextHandler(&logs, nil)), testConfig(config.FormatText), "doorman.yaml", ":8800")
+func TestStartupRecord(t *testing.T) {
+	var logs bytes.Buffer
+	cfg := testConfig(config.FormatJSON)
+	cfg.Listen = ":8800"
+	announceStartup(slog.New(slog.NewJSONHandler(&logs, nil)), cfg, "doorman.yaml")
 
-	want := "▌doorman dev ▸ :8800 ▸ 2 destinations ▸ 3 keys\n"
-	if out.String() != want {
-		t.Errorf("banner = %q, want %q", out.String(), want)
-	}
-	if !strings.Contains(logs.String(), `msg="doorman started"`) {
-		t.Errorf("the startup record is missing: %q", logs.String())
-	}
-}
-
-func TestNoBannerWithJSONLogs(t *testing.T) {
-	var out, logs bytes.Buffer
-	announceStartup(&out, slog.New(slog.NewJSONHandler(&logs, nil)), testConfig(config.FormatJSON), "doorman.yaml", ":8800")
-
-	if out.Len() != 0 {
-		t.Errorf("JSON logs should get no banner, got %q", out.String())
-	}
-	if !strings.Contains(logs.String(), `"destinations":2`) {
-		t.Errorf("the startup record should still be logged: %q", logs.String())
+	for _, want := range []string{`"msg":"🚪 doorman started"`, `"listen":":8800"`, `"destinations":2`, `"keys":3`} {
+		if !strings.Contains(logs.String(), want) {
+			t.Errorf("the startup record is missing %s: %q", want, logs.String())
+		}
 	}
 }
 

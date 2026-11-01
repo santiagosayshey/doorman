@@ -70,7 +70,7 @@ func runProxy(args []string) int {
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
-	announceStartup(os.Stdout, log, cfg, *path, cfg.Listen)
+	announceStartup(log, cfg, *path)
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Error("server stopped", "error", err)
 		return 1
